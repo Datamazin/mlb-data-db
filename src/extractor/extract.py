@@ -121,7 +121,7 @@ async def extract_game_feeds(
     errors: list[tuple[int, Exception]] = []
 
     async def _fetch_one(game_pk: int) -> tuple[int, dict[str, Any] | None]:
-        path = f"/v1/game/{game_pk}/feed/live"
+        path = f"/v1.1/game/{game_pk}/feed/live"
         async with sem:
             try:
                 raw = await client.get(path)
@@ -142,7 +142,7 @@ async def extract_game_feeds(
             continue
         try:
             feed = GameFeedResponse.model_validate(raw)
-            source_url = f"/v1/game/{game_pk}/feed/live"
+            source_url = f"/v1.1/game/{game_pk}/feed/live"
             record = game_feed_to_record(feed, raw, source_url)
             game_date = date.fromisoformat(record["game_date"]) if record["game_date"] else date.today()
             by_date.setdefault(game_date, []).append(record)

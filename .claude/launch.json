@@ -1,0 +1,20 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "explore-api",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": ["run", "python", "scripts/explore_api.py"]
+    },
+    {
+      "name": "migrate",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": ["run", "python", "migrations/migrate.py"]
+    },
+    {
+      "name": "backfill",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": ["run", "python", "-m", "src.extractor.backfill"]
+    }
+  ]
+}

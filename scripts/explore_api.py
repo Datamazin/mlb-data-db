@@ -167,7 +167,7 @@ async def probe_game_feed(client: MLBClient, game_pk: int) -> None:
     """Probe /v1/game/{gamePk}/feed/live."""
     header(f"PROBE: /v1/game/{game_pk}/feed/live")
     try:
-        raw = await client.get(f"/v1/game/{game_pk}/feed/live")
+        raw = await client.get(f"/v1.1/game/{game_pk}/feed/live")
         model = GameFeedResponse.model_validate(raw)
         ok(f"GameFeedResponse validated — gamePk={model.game_pk}")
 
@@ -315,7 +315,7 @@ def print_summary(game_pks: list[int], season: int) -> None:
     if game_pks:
         print(f"  Sample gamePks for further manual inspection:")
         for pk in game_pks[:5]:
-            print(f"    https://statsapi.mlb.com/api/v1/game/{pk}/feed/live")
+            print(f"    https://statsapi.mlb.com/api/v1.1/game/{pk}/feed/live")
 
 
 # ── Entry point ────────────────────────────────────────────────────────────────

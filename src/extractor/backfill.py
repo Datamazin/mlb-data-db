@@ -126,7 +126,7 @@ async def _backfill_month(
             {
                 "entity_key": str(pk),
                 "raw_json": f'{{"gamePk":{pk}}}',  # placeholder; real hash from file
-                "source_url": f"/v1/game/{pk}/feed/live",
+                "source_url": f"/v1.1/game/{pk}/feed/live",
             }
             for pk in extracted_pks
         ]
