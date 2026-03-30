@@ -11,6 +11,7 @@ class _Ref(BaseModel):
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
     id: int | None = None
     name: str | None = None
+    full_name: str | None = Field(None, alias="fullName")  # roster person refs use fullName
     code: str | None = None  # used by position refs e.g. {"code": "DH", "name": "..."}
 
 

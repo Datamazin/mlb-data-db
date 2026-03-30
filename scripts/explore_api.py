@@ -82,7 +82,8 @@ def _ignored_keys(raw: dict[str, Any], model: Any) -> list[str]:
     """
     raw_top = set(raw.keys())
     model_aliases: set[str] = set()
-    for field in model.model_fields.values():
+    model_cls = type(model)
+    for field in model_cls.model_fields.values():
         if field.alias:
             model_aliases.add(field.alias)
         model_aliases.add(field.title or "")
@@ -93,7 +94,7 @@ def _ignored_keys(raw: dict[str, Any], model: Any) -> list[str]:
     # isn't an alias in the model.
     all_aliases = {
         (f.alias or name)
-        for name, f in model.model_fields.items()
+        for name, f in model_cls.model_fields.items()
     }
     return sorted(raw_top - all_aliases - {"copyright"})
 
@@ -288,7 +289,8 @@ async def probe_roster(client: MLBClient, team_id: int, season_year: int) -> Non
         model = RosterResponse.model_validate(raw)
         ok(f"RosterResponse validated — {len(model.roster)} player(s)")
         for entry in model.roster[:3]:
-            kv(f"#{entry.jersey_number}", f"id={entry.person.id}  {entry.person.name}  "
+            display_name = entry.person.full_name or entry.person.name
+            kv(f"#{entry.jersey_number}", f"id={entry.person.id}  {display_name}  "
                                            f"pos={entry.position.code if entry.position else '?'}")
 
     except Exception as exc:
