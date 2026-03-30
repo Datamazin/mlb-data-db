@@ -1,0 +1,67 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mlb-data-db"
+version = "0.1.0"
+description = "MLB Stats Data Pipeline — DuckDB analytical store for seasons 2022–2026"
+requires-python = ">=3.12"
+dependencies = [
+    # Core pipeline
+    "duckdb==1.2.1",
+    "httpx[http2]==0.28.1",
+    "pydantic==2.11.1",
+    "pyarrow==19.0.1",
+
+    # Scheduling
+    "apscheduler==3.11.0",
+
+    # Azure distribution
+    "azure-storage-blob==12.24.1",
+    "azure-identity==1.21.0",
+
+    # Utilities
+    "tenacity==9.1.2",        # retry logic with exponential backoff
+    "structlog==25.1.0",      # structured logging
+    "python-dotenv==1.1.0",   # local .env support
+    "pytz==2025.2",           # required by DuckDB Python integration for TIMESTAMPTZ
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==8.3.5",
+    "pytest-asyncio==0.25.3",
+    "pytest-cov==6.1.0",
+    "ruff==0.11.2",
+    "mypy==1.15.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "--cov=src --cov-report=term-missing"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+ignore_missing_imports = true
+
+[dependency-groups]
+dev = [
+    "pytest==8.3.5",
+    "pytest-asyncio==0.25.3",
+    "pytest-cov==6.1.0",
+    "ruff==0.11.2",
+    "mypy==1.15.0",
+]

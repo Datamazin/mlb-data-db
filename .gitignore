@@ -1,0 +1,57 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+.venv/
+venv/
+env/
+
+# uv — commit uv.lock and .python-version; never commit .venv
+# uv.lock  ← intentionally NOT ignored (reproducible installs)
+# .python-version ← intentionally NOT ignored (pins interpreter)
+
+# DuckDB files — data/ is local only; never commit raw data or the DB artifact
+data/
+*.duckdb
+*.duckdb.wal
+
+# Parquet / Arrow
+*.parquet
+*.arrow
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Azure credentials
+*.pem
+*.key
+azureauth.json
+
+# Test / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# Type checking
+.mypy_cache/
+
+# Ruff
+.ruff_cache/
+
+# IDE
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+
+# macOS
+.DS_Store
