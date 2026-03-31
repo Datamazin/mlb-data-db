@@ -300,8 +300,9 @@ uv pip compile pyproject.toml -o requirements.txt
 - [x] Integration tests — 22 tests covering upload, copy, SAS, env config, RunTracker, scheduler wiring
 
 ### Milestone 8 — QA & Performance
-- [ ] Integration test suite (real DuckDB, no mocks)
-- [ ] Query benchmark suite against performance targets
+- [x] Data accuracy validation (`tests/integration/test_data_accuracy.py`) — 38 tests covering mathematical invariants (win_pct, games_back, run_diff, streak format), referential integrity, NULL checks, PK uniqueness across all gold views and silver tables
+- [x] Query benchmark suite (`tests/benchmarks/`) — 28 SLA-gated tests over a 5-season dataset (12,150 games, 750 players, 30 teams); all gold queries complete within documented SLA thresholds
+- [x] `make test-accuracy` and `make benchmark` targets added to Makefile
 
 ### Milestone 9 — Production Launch
 - [ ] All 30 clubs onboarded

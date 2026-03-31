@@ -1,4 +1,4 @@
-.PHONY: install test lint typecheck explore migrate fmt help
+.PHONY: install test test-unit test-integration test-accuracy benchmark lint typecheck explore migrate fmt help
 
 # ── Bootstrap ──────────────────────────────────────────────────────────────────
 install:  ## Install all dependencies (creates .venv, installs from uv.lock)
@@ -13,6 +13,12 @@ test-unit:  ## Run unit tests only
 
 test-integration:  ## Run integration tests only (real DuckDB, no mocks)
 	uv run pytest tests/integration/
+
+test-accuracy:  ## Run data accuracy & integrity validation tests
+	uv run pytest tests/integration/test_data_accuracy.py -v
+
+benchmark:  ## Run query benchmark suite (12,150 games, 750 players, SLA assertions)
+	uv run pytest tests/benchmarks/ -v
 
 lint:  ## Check code style with ruff
 	uv run ruff check src/ tests/ scripts/
