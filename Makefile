@@ -49,6 +49,18 @@ aggregate:  ## Run gold aggregation (silver → gold)
 aggregate-force:  ## Re-run all gold aggregations ignoring checksums
 	uv run python -m src.aggregator.aggregate --force
 
+scheduler:  ## Start the pipeline scheduler daemon
+	uv run python -m src.scheduler.jobs
+
+run-nightly:  ## Trigger nightly incremental job once (yesterday by default)
+	uv run python -m src.scheduler.jobs --run nightly_incremental
+
+run-roster:  ## Trigger roster sync job once
+	uv run python -m src.scheduler.jobs --run roster_sync
+
+run-standings:  ## Trigger standings snapshot job once
+	uv run python -m src.scheduler.jobs --run standings_snapshot
+
 # ── Help ───────────────────────────────────────────────────────────────────────
 help:  ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*##' $(MAKEFILE_LIST) \

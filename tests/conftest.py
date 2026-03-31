@@ -49,6 +49,25 @@ def db_file(tmp_path: Path) -> duckdb.DuckDBPyConnection:
 
 
 @pytest.fixture
+def db_file_path(tmp_path: Path) -> tuple[Path, duckdb.DuckDBPyConnection]:
+    """
+    File-backed DuckDB that exposes both the connection AND the file path.
+
+    Yields (path, conn). Use when a test seeds data then re-opens the same
+    file (e.g. scheduler job tests that need to close/reopen the connection).
+    """
+    db_path = tmp_path / "test_mlb.duckdb"
+    conn = duckdb.connect(str(db_path))
+    for migration in sorted(MIGRATIONS_DIR.glob("*.sql")):
+        conn.execute(migration.read_text(encoding="utf-8"))
+    yield db_path, conn
+    try:
+        conn.close()
+    except Exception:
+        pass  # already closed by the test
+
+
+@pytest.fixture
 def bronze_path(tmp_path: Path) -> Path:
     """Temporary bronze directory for Parquet writer tests."""
     path = tmp_path / "bronze"
