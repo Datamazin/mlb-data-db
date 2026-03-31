@@ -1,7 +1,7 @@
 """
-M6/M7 — Scheduled pipeline jobs.
+M6/M7/M9 — Scheduled pipeline jobs.
 
-Four recurring jobs:
+Five recurring jobs:
 
   nightly_incremental   02:00 ET daily (Mar–Nov)
       Extract prior-day games, transform bronze→silver, aggregate silver→gold.
@@ -16,6 +16,11 @@ Four recurring jobs:
   distribution          04:30 ET daily
       Upload gold mlb.duckdb to Azure Blob and provision per-club SAS URLs.
 
+  health_check          07:00 ET daily
+      Verify SLA compliance, data freshness, and artifact integrity.
+      Logs structured warnings for any breaches; records outcome in
+      meta.pipeline_runs.
+
 Each job:
   - Opens its own DuckDB connection (safe for single-process async use)
   - Records a RunTracker lifecycle (start → complete/fail)
@@ -27,6 +32,7 @@ Scheduler entry point:
     uv run python -m src.scheduler.jobs --run roster_sync
     uv run python -m src.scheduler.jobs --run standings_snapshot
     uv run python -m src.scheduler.jobs --run distribution
+    uv run python -m src.scheduler.jobs --run health_check
 """
 
 from __future__ import annotations
@@ -51,6 +57,7 @@ from run_tracker.tracker import RunTracker
 from transformer.transform import Transformer
 from aggregator.aggregate import Aggregator
 from distribution.sync import run_distribution
+from monitoring.health import run_health_check
 
 log = structlog.get_logger(__name__)
 
@@ -270,6 +277,37 @@ async def standings_snapshot(
         conn.close()
 
 
+# ── Job: Health Check ─────────────────────────────────────────────────────────
+
+async def health_check(
+    db_path: Path = DB_PATH,
+) -> None:
+    """
+    Verify SLA compliance, data freshness, and artifact integrity.
+
+    Runs after distribution (04:30) to confirm the full nightly pipeline
+    completed successfully. Logs structured warnings for any breaches and
+    records success/failure in meta.pipeline_runs.
+
+    Called at 07:00 ET daily.
+    """
+    log.info("health_check_start")
+    try:
+        report = run_health_check(db_path=db_path)
+        if report.healthy:
+            log.info("health_check_done", checks=len(report.checks))
+        else:
+            for failure in report.failures:
+                log.warning(
+                    "health_check_sla_breach",
+                    check=failure.name,
+                    message=failure.message,
+                )
+    except Exception as exc:
+        log.error("health_check_failed", error=str(exc))
+        raise
+
+
 # ── Job: Distribution ─────────────────────────────────────────────────────────
 
 async def distribution(
@@ -360,6 +398,16 @@ def build_scheduler() -> AsyncIOScheduler:
         coalesce=True,
     )
 
+    # Health Check — 07:00 ET, daily year-round
+    scheduler.add_job(
+        health_check,
+        CronTrigger(hour=7, minute=0, timezone=tz),
+        id="health_check",
+        name="Pipeline Health Check",
+        misfire_grace_time=3600,
+        coalesce=True,
+    )
+
     return scheduler
 
 
@@ -371,7 +419,7 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--run",
-        choices=["nightly_incremental", "roster_sync", "standings_snapshot", "distribution"],
+        choices=["nightly_incremental", "roster_sync", "standings_snapshot", "distribution", "health_check"],
         default=None,
         metavar="JOB",
         help="Run a single job immediately and exit (default: start the daemon)",
@@ -415,6 +463,8 @@ async def _run_once(args: argparse.Namespace) -> None:
         await standings_snapshot(db_path=args.db)
     elif args.run == "distribution":
         await distribution(db_path=args.db)
+    elif args.run == "health_check":
+        await health_check(db_path=args.db)
 
 
 def main() -> None:

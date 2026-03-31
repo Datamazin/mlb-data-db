@@ -305,8 +305,13 @@ uv pip compile pyproject.toml -o requirements.txt
 - [x] `make test-accuracy` and `make benchmark` targets added to Makefile
 
 ### Milestone 9 — Production Launch
-- [ ] All 30 clubs onboarded
-- [ ] Monitoring + SLA defined
+- [x] SLA definitions (`src/monitoring/sla.py`) — 4 jobs with max_age_hours windows; data freshness and artifact size bounds
+- [x] Health checker (`src/monitoring/health.py`) — `HealthChecker` with 5 check categories: SLA compliance, failed run detection, data freshness (off-season aware), artifact size, gold row-count sanity
+- [x] `run_health_check()` — RunTracker-integrated entry point; records outcome in `meta.pipeline_runs`
+- [x] Health check job wired into APScheduler at 07:00 ET daily (`src/scheduler/jobs.py`)
+- [x] CLI: `uv run python -m src.monitoring.health [--json]`
+- [x] Integration tests — 30 tests covering all check categories, SLA edge cases, scheduler wiring
+- [ ] All 30 clubs onboarded (operational — requires Azure credentials; distribution code is ready in `src/distribution/sync.py`)
 
 ---
 
