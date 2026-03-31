@@ -43,6 +43,12 @@ transform:  ## Run silver transformation (bronze → silver)
 transform-force:  ## Re-run all silver transforms ignoring checksums
 	uv run python -m src.transformer.transform --force
 
+aggregate:  ## Run gold aggregation (silver → gold)
+	uv run python -m src.aggregator.aggregate
+
+aggregate-force:  ## Re-run all gold aggregations ignoring checksums
+	uv run python -m src.aggregator.aggregate --force
+
 # ── Help ───────────────────────────────────────────────────────────────────────
 help:  ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*##' $(MAKEFILE_LIST) \
