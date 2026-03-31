@@ -54,3 +54,18 @@ def bronze_path(tmp_path: Path) -> Path:
     path = tmp_path / "bronze"
     path.mkdir()
     return path
+
+
+SILVER_SQL_DIR = Path(__file__).parent.parent / "sql" / "silver"
+
+
+@pytest.fixture
+def seeded_db(db: duckdb.DuckDBPyConnection) -> duckdb.DuckDBPyConnection:
+    """
+    In-memory DuckDB with schema + silver.seasons pre-seeded.
+
+    Extends the `db` fixture; use this for any test that needs FK-valid
+    season rows before loading teams, games, etc.
+    """
+    db.execute((SILVER_SQL_DIR / "001_seed_seasons.sql").read_text(encoding="utf-8"))
+    return db

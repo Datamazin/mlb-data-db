@@ -37,6 +37,12 @@ explore:  ## Validate Pydantic models against live MLB API (run before back-fill
 explore-date:  ## Probe a specific date: make explore-date DATE=2024-09-01
 	uv run python scripts/explore_api.py --date $(DATE)
 
+transform:  ## Run silver transformation (bronze → silver)
+	uv run python -m src.transformer.transform
+
+transform-force:  ## Re-run all silver transforms ignoring checksums
+	uv run python -m src.transformer.transform --force
+
 # ── Help ───────────────────────────────────────────────────────────────────────
 help:  ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*##' $(MAKEFILE_LIST) \
