@@ -1,7 +1,7 @@
 """
-M6 — Scheduled pipeline jobs.
+M6/M7 — Scheduled pipeline jobs.
 
-Three recurring jobs:
+Four recurring jobs:
 
   nightly_incremental   02:00 ET daily (Mar–Nov)
       Extract prior-day games, transform bronze→silver, aggregate silver→gold.
@@ -13,6 +13,9 @@ Three recurring jobs:
   standings_snapshot    03:00 ET daily (Apr–Oct)
       Recompute gold.standings_snap from all Final regular-season games.
 
+  distribution          04:30 ET daily
+      Upload gold mlb.duckdb to Azure Blob and provision per-club SAS URLs.
+
 Each job:
   - Opens its own DuckDB connection (safe for single-process async use)
   - Records a RunTracker lifecycle (start → complete/fail)
@@ -23,6 +26,7 @@ Scheduler entry point:
     uv run python -m src.scheduler.jobs --run nightly_incremental
     uv run python -m src.scheduler.jobs --run roster_sync
     uv run python -m src.scheduler.jobs --run standings_snapshot
+    uv run python -m src.scheduler.jobs --run distribution
 """
 
 from __future__ import annotations
@@ -46,6 +50,7 @@ from extractor.writer import BronzeWriter
 from run_tracker.tracker import RunTracker
 from transformer.transform import Transformer
 from aggregator.aggregate import Aggregator
+from distribution.sync import run_distribution
 
 log = structlog.get_logger(__name__)
 
@@ -265,6 +270,44 @@ async def standings_snapshot(
         conn.close()
 
 
+# ── Job: Distribution ─────────────────────────────────────────────────────────
+
+async def distribution(
+    db_path: Path = DB_PATH,
+    sas_expiry_hours: int = 24,
+) -> None:
+    """
+    Upload gold mlb.duckdb to Azure Blob and provision per-club SAS URLs.
+
+    Called at 04:30 ET daily, after nightly_incremental (02:00) and
+    standings_snapshot (03:00) have completed.
+
+    Requires AZURE_STORAGE_ACCOUNT_NAME to be set in the environment.
+    If the variable is absent the job fails cleanly and records the error
+    in meta.pipeline_runs without crashing the scheduler process.
+    """
+    log.info("distribution_start")
+    conn = _open_db()
+    try:
+        result = run_distribution(
+            db_path=db_path,
+            duckdb_conn=conn,
+            sas_expiry_hours=sas_expiry_hours,
+        )
+        if result.success:
+            log.info(
+                "distribution_done",
+                clubs_synced=result.clubs_synced,
+            )
+        else:
+            log.error("distribution_done_with_errors", errors=result.errors)
+    except Exception as exc:
+        log.error("distribution_failed", error=str(exc))
+        raise
+    finally:
+        conn.close()
+
+
 # ── Scheduler wiring ───────────────────────────────────────────────────────────
 
 def build_scheduler() -> AsyncIOScheduler:
@@ -307,6 +350,16 @@ def build_scheduler() -> AsyncIOScheduler:
         coalesce=True,
     )
 
+    # Distribution — 04:30 ET, daily year-round
+    scheduler.add_job(
+        distribution,
+        CronTrigger(hour=4, minute=30, timezone=tz),
+        id="distribution",
+        name="DuckDB Distribution",
+        misfire_grace_time=3600,
+        coalesce=True,
+    )
+
     return scheduler
 
 
@@ -318,7 +371,7 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--run",
-        choices=["nightly_incremental", "roster_sync", "standings_snapshot"],
+        choices=["nightly_incremental", "roster_sync", "standings_snapshot", "distribution"],
         default=None,
         metavar="JOB",
         help="Run a single job immediately and exit (default: start the daemon)",
@@ -360,6 +413,8 @@ async def _run_once(args: argparse.Namespace) -> None:
         )
     elif args.run == "standings_snapshot":
         await standings_snapshot(db_path=args.db)
+    elif args.run == "distribution":
+        await distribution(db_path=args.db)
 
 
 def main() -> None:

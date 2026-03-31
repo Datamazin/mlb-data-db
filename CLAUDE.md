@@ -293,8 +293,11 @@ uv pip compile pyproject.toml -o requirements.txt
 - [ ] APScheduler wiring (`src/scheduler/jobs.py`)
 
 ### Milestone 7 — Distribution
-- [ ] Azure Blob sync (`src/distribution/sync.py`)
-- [ ] Per-club SAS token provisioning
+- [x] Azure Blob sync (`src/distribution/sync.py`) — `DistributionSync` with master upload + server-side per-club copy
+- [x] Per-club SAS token provisioning — user-delegation SAS (no storage account key), configurable expiry
+- [x] `run_distribution()` — RunTracker-integrated entry point
+- [x] Distribution job wired into APScheduler at 04:30 ET daily (`src/scheduler/jobs.py`)
+- [x] Integration tests — 22 tests covering upload, copy, SAS, env config, RunTracker, scheduler wiring
 
 ### Milestone 8 — QA & Performance
 - [ ] Integration test suite (real DuckDB, no mocks)
