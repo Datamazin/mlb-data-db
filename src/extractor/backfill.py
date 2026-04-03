@@ -43,6 +43,7 @@ SEASON_RANGES: dict[int, tuple[date, date]] = {
     2023: (date(2023, 2, 1), date(2023, 11, 10)),
     2024: (date(2024, 2, 1), date(2024, 11, 5)),
     2025: (date(2025, 2, 1), date(2025, 11, 5)),
+    2026: (date(2026, 3, 26), date.today() - timedelta(days=1)),
 }
 
 DEFAULT_SEASONS = [2022, 2023, 2024, 2025]
