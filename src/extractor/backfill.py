@@ -28,6 +28,7 @@ import structlog
 
 from .client import MLBClient
 from .extract import extract_game_feeds, extract_players, extract_schedule, extract_teams
+from src.logging_config import configure_logging
 from .writer import BronzeWriter
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -289,8 +290,7 @@ def _parse_args() -> argparse.Namespace:
 
 
 if __name__ == "__main__":
-    import logging
-    logging.basicConfig(level=logging.INFO)
+    configure_logging()
 
     args = _parse_args()
     asyncio.run(

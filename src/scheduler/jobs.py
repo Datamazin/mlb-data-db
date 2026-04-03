@@ -37,6 +37,7 @@ import duckdb
 import structlog
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from src.logging_config import configure_logging
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
@@ -363,8 +364,7 @@ async def _run_once(args: argparse.Namespace) -> None:
 
 
 def main() -> None:
-    import logging
-    logging.basicConfig(level=logging.INFO)
+    configure_logging()
 
     args = _parse_args()
 

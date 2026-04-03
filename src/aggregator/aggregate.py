@@ -29,6 +29,7 @@ from pathlib import Path
 
 import duckdb
 import structlog
+from src.logging_config import configure_logging
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from run_tracker.tracker import RunTracker
@@ -215,8 +216,7 @@ def _parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
-    import logging
-    logging.basicConfig(level=logging.INFO)
+    configure_logging()
 
     args = _parse_args()
 
