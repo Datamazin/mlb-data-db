@@ -49,6 +49,9 @@ aggregate:  ## Run gold aggregation (silver → gold)
 aggregate-force:  ## Re-run all gold aggregations ignoring checksums
 	uv run python -m src.aggregator.aggregate --force
 
+streamlit:  ## Launch the Streamlit analytics frontend
+	uv run streamlit run app.py
+
 scheduler:  ## Start the pipeline scheduler daemon
 	uv run python -m src.scheduler.jobs
 

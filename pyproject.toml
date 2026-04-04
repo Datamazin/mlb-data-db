@@ -26,6 +26,10 @@ dependencies = [
     "structlog==25.1.0",      # structured logging
     "python-dotenv==1.1.0",   # local .env support
     "pytz==2025.2",           # required by DuckDB Python integration for TIMESTAMPTZ
+
+    # Frontend
+    "streamlit>=1.40.0",
+    "plotly>=5.24.0",
 ]
 
 [project.optional-dependencies]
