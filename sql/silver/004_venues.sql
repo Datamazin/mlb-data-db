@@ -20,7 +20,7 @@ SELECT
     NULL::VARCHAR, NULL::VARCHAR, NULL::VARCHAR,
     NULL::VARCHAR, NULL::INTEGER, NULL::VARCHAR,
     current_timestamp AS loaded_at
-FROM read_parquet('{bronze_path}/games/year=*/month=*/*.parquet')
+FROM read_parquet('{bronze_path}/games/year={year_glob}/month={month_glob}/*.parquet')
 WHERE json_extract_string(raw_json, '$.gameData.venue.id')   IS NOT NULL
   AND json_extract_string(raw_json, '$.gameData.venue.name') IS NOT NULL
 QUALIFY ROW_NUMBER() OVER (

@@ -12,7 +12,7 @@ WITH latest_feeds AS (
     SELECT
         game_pk,
         CAST(json_extract(raw_json, '$.liveData.boxscore.teams') AS JSON) AS teams_json
-    FROM read_parquet('{bronze_path}/games/year=*/month=*/*.parquet')
+    FROM read_parquet('{bronze_path}/games/year={year_glob}/month={month_glob}/*.parquet')
     WHERE json_extract(raw_json, '$.liveData.boxscore.teams') IS NOT NULL
     QUALIFY ROW_NUMBER() OVER (PARTITION BY game_pk ORDER BY extracted_at DESC) = 1
 ),

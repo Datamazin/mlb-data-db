@@ -63,9 +63,19 @@ INCREMENTAL_GAME_TYPES = "R,F,D,L,W"
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
-def _open_db() -> duckdb.DuckDBPyConnection:
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    return duckdb.connect(str(DB_PATH))
+def _open_db(db_path: Path = DB_PATH) -> duckdb.DuckDBPyConnection:
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    import tempfile
+    conn = duckdb.connect(str(db_path))
+    # Set memory limit BELOW physical RAM so DuckDB spills to disk instead of
+    # OOM-crashing. 6 GB leaves headroom for the OS and other processes.
+    # temp_directory must be set before memory_limit takes effect for spilling.
+    tmp = Path(tempfile.gettempdir()) / "duckdb_mlb"
+    tmp.mkdir(parents=True, exist_ok=True)
+    conn.execute(f"SET temp_directory='{tmp}'")
+    conn.execute("SET memory_limit='6GB'")
+    conn.execute("SET threads=4")
+    return conn
 
 
 # ── Job: Nightly Incremental ───────────────────────────────────────────────────
@@ -86,7 +96,7 @@ async def nightly_incremental(
 
     log.info("nightly_incremental_start", target_date=str(target_date))
 
-    conn = duckdb.connect(str(db_path))
+    conn = _open_db(db_path)
     tracker = RunTracker(conn)
     writer = BronzeWriter(bronze_path)
     run_id = tracker.start_run("nightly_incremental", target_date=target_date)
@@ -133,14 +143,18 @@ async def nightly_incremental(
                 )
 
         # 5 — Transform bronze → silver
-        transformer = Transformer(conn, bronze_path)
-        transform_result = transformer.run()
+        # year_glob: scope partition scans to the active season so we don't
+        # re-read multi-GB historical game feeds on every nightly run.
+        # force=True: script checksums don't change between runs, so without
+        # force the transformer would skip all scripts.
+        transformer = Transformer(conn, bronze_path, year_glob=str(target_date.year))
+        transform_result = transformer.run(force=True)
         if not transform_result.success:
             raise RuntimeError(f"Transform failed: {transform_result.errors}")
 
         # 6 — Aggregate silver → gold
         aggregator = Aggregator(conn)
-        agg_result = aggregator.run()
+        agg_result = aggregator.run(force=True)
         if not agg_result.success:
             raise RuntimeError(f"Aggregate failed: {agg_result.errors}")
 
@@ -182,7 +196,7 @@ async def roster_sync(
     """
     log.info("roster_sync_start", season_year=season_year)
 
-    conn = duckdb.connect(str(db_path))
+    conn = _open_db(db_path)
     tracker = RunTracker(conn)
     writer = BronzeWriter(bronze_path)
     run_id = tracker.start_run("roster_sync", season_year=season_year)
@@ -242,7 +256,7 @@ async def standings_snapshot(
     """
     log.info("standings_snapshot_start")
 
-    conn = duckdb.connect(str(db_path))
+    conn = _open_db(db_path)
     tracker = RunTracker(conn)
     run_id = tracker.start_run("standings_snapshot")
 
@@ -346,6 +360,19 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+async def _run_daemon() -> None:
+    scheduler = build_scheduler()
+    scheduler.start()
+    log.info("scheduler_started", jobs=[j.id for j in scheduler.get_jobs()])
+    try:
+        await asyncio.Event().wait()  # block forever until cancelled
+    except (KeyboardInterrupt, SystemExit, asyncio.CancelledError):
+        pass
+    finally:
+        scheduler.shutdown()
+        log.info("scheduler_stopped")
+
+
 async def _run_once(args: argparse.Namespace) -> None:
     if args.run == "nightly_incremental":
         await nightly_incremental(
@@ -373,17 +400,7 @@ def main() -> None:
         return
 
     # Daemon mode — run scheduler until interrupted
-    scheduler = build_scheduler()
-    scheduler.start()
-    log.info("scheduler_started", jobs=[j.id for j in scheduler.get_jobs()])
-
-    try:
-        asyncio.get_event_loop().run_forever()
-    except (KeyboardInterrupt, SystemExit):
-        pass
-    finally:
-        scheduler.shutdown()
-        log.info("scheduler_stopped")
+    asyncio.run(_run_daemon())
 
 
 if __name__ == "__main__":

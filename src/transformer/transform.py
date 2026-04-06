@@ -70,10 +70,25 @@ def _split_statements(sql: str) -> list[str]:
     return [s.strip() for s in sql_no_line_comments.split(";") if s.strip()]
 
 
-def _render_sql(template: str, bronze_path: str) -> str:
-    """Substitute the {bronze_path} placeholder in SQL text using a literal replace
-    so that other curly-brace patterns in SQL comments are not treated as placeholders."""
-    return template.replace("{bronze_path}", bronze_path)
+def _render_sql(
+    template: str,
+    bronze_path: str,
+    year_glob: str = "*",
+    month_glob: str = "*",
+) -> str:
+    """Substitute placeholders in SQL text using literal replace.
+    {bronze_path} — root of the bronze Parquet tree.
+    {year_glob}   — Hive year partition selector; "*" for full rebuild,
+                    e.g. "2026" for incremental runs (avoids scanning all seasons).
+    {month_glob}  — Hive month partition selector; "*" for all months,
+                    e.g. "04" for single-month historical backfill (avoids OOM).
+    """
+    return (
+        template
+        .replace("{bronze_path}", bronze_path)
+        .replace("{year_glob}", year_glob)
+        .replace("{month_glob}", month_glob)
+    )
 
 
 class Transformer:
@@ -84,9 +99,17 @@ class Transformer:
     INSERT OR REPLACE targets live tables.
     """
 
-    def __init__(self, conn: duckdb.DuckDBPyConnection, bronze_path: Path) -> None:
+    def __init__(
+        self,
+        conn: duckdb.DuckDBPyConnection,
+        bronze_path: Path,
+        year_glob: str = "*",
+        month_glob: str = "*",
+    ) -> None:
         self._conn = conn
         self._bronze_path = str(bronze_path)
+        self._year_glob = year_glob
+        self._month_glob = month_glob
         self._bootstrap()
 
     def _bootstrap(self) -> None:
@@ -122,7 +145,7 @@ class Transformer:
         Raises on real errors so callers can decide how to handle failures.
         """
         sql_template = script_path.read_text()
-        sql = _render_sql(sql_template, self._bronze_path)
+        sql = _render_sql(sql_template, self._bronze_path, self._year_glob, self._month_glob)
 
         # Split into individual non-empty statements (comment-aware).
         statements = _split_statements(sql)

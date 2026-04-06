@@ -274,7 +274,7 @@ CREATE TABLE IF NOT EXISTS gold.standings_snap (
     away_losses     INTEGER,
     run_diff        INTEGER,
     loaded_at       TIMESTAMPTZ NOT NULL,
-    PRIMARY KEY (snap_date, team_id)
+    PRIMARY KEY (snap_date, season_year, team_id)
 );
 
 -- League averages — needed for OPS+ computation in player_season_summary view

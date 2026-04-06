@@ -29,7 +29,7 @@ SELECT
     series_description,
     series_game_num,
     current_timestamp                      AS loaded_at
-FROM read_parquet('{bronze_path}/games/year=*/month=*/*.parquet')
+FROM read_parquet('{bronze_path}/games/year={year_glob}/month={month_glob}/*.parquet')
 WHERE game_date IS NOT NULL
   AND season_year IN (SELECT season_year FROM silver.seasons)
 QUALIFY ROW_NUMBER() OVER (
