@@ -5,6 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+import pandas as pd
 import plotly.express as px
 import streamlit as st
 
@@ -77,11 +78,14 @@ df = conn.execute(f"""
     ORDER BY game_date DESC, game_pk DESC
 """, params).df()
 
-st.write(f"{len(df):,} games")
-st.dataframe(
+st.write(f"{len(df):,} games — click a row to view boxscore")
+
+event = st.dataframe(
     df.drop(columns=["game_pk"]),
     width="stretch",
     hide_index=True,
+    on_select="rerun",
+    selection_mode="single-row",
     column_config={
         "game_date":    st.column_config.DateColumn("Date"),
         "away":         "Away",
@@ -95,6 +99,83 @@ st.dataframe(
         "duration_min": "Min",
     },
 )
+
+# ── Boxscore panel ────────────────────────────────────────────────────────────
+selected_rows = event.selection.rows
+if selected_rows:
+    game_pk = int(df.iloc[selected_rows[0]]["game_pk"])
+
+    game = conn.execute("""
+        SELECT away_team_name, away_team_abbrev, away_score,
+               home_team_name, home_team_abbrev, home_score,
+               game_date, venue_name, innings
+        FROM gold.fact_game WHERE game_pk = ?
+    """, [game_pk]).fetchone()
+
+    if game:
+        away_name, away_abbrev, away_score, home_name, home_abbrev, home_score, \
+            game_date, venue_name, total_innings = game
+
+        st.divider()
+        st.subheader(
+            f"{away_name} @ {home_name}  —  "
+            f"{game_date.strftime('%B %-d, %Y')}  —  {venue_name}"
+        )
+
+        # Linescore
+        linescore = conn.execute("""
+            SELECT inning,
+                   away_runs, away_hits, away_errors,
+                   home_runs, home_hits, home_errors
+            FROM silver.game_linescore
+            WHERE game_pk = ?
+            ORDER BY inning
+        """, [game_pk]).df()
+
+        if not linescore.empty:
+            max_inn = max(9, int(linescore["inning"].max()))
+            innings_range = range(1, max_inn + 1)
+
+            # Build one row per team
+            away_row: dict = {"Team": away_abbrev}
+            home_row: dict = {"Team": home_abbrev}
+            for i in innings_range:
+                inn_data = linescore[linescore["inning"] == i]
+                if inn_data.empty:
+                    away_row[str(i)] = "-"
+                    home_row[str(i)] = "-"
+                else:
+                    away_row[str(i)] = str(int(inn_data["away_runs"].iloc[0]))
+                    home_row[str(i)] = str(int(inn_data["home_runs"].iloc[0]))
+
+            # Totals
+            away_row["R"] = str(int(linescore["away_runs"].sum()))
+            away_row["H"] = str(int(linescore["away_hits"].sum()))
+            away_row["E"] = str(int(linescore["away_errors"].sum()))
+            home_row["R"] = str(int(linescore["home_runs"].sum()))
+            home_row["H"] = str(int(linescore["home_hits"].sum()))
+            home_row["E"] = str(int(linescore["home_errors"].sum()))
+
+            ls_df = pd.DataFrame([away_row, home_row]).set_index("Team")
+            st.dataframe(ls_df, width="stretch")
+        else:
+            st.info("Linescore not available for this game.")
+
+        # Team totals
+        boxscore = conn.execute("""
+            SELECT t.team_abbrev, b.is_home,
+                   b.runs, b.hits, b.errors, b.left_on_base
+            FROM silver.game_boxscore b
+            JOIN silver.teams t ON b.team_id = t.team_id
+              AND t.season_year = (SELECT season_year FROM silver.games WHERE game_pk = ?)
+            WHERE b.game_pk = ?
+            ORDER BY b.is_home
+        """, [game_pk, game_pk]).df()
+
+        if not boxscore.empty:
+            boxscore = boxscore.drop(columns=["is_home"])
+            boxscore.columns = ["Team", "R", "H", "E", "LOB"]
+            st.dataframe(boxscore, hide_index=True)
 
 # ── Run-differential chart for selected team ──────────────────────────────────
 if team_filter != "All" and not df.empty:
