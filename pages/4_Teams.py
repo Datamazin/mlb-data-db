@@ -53,4 +53,4 @@ for league in ["American League", "National League"]:
         st.subheader(division)
         display = div_df[["team_name", "team_abbrev", "city", "venue_name", "first_year", "active"]]
         display.columns = ["Team", "Abbrev", "City", "Venue", "Est.", "Active"]
-        st.dataframe(display, use_container_width=True, hide_index=True)
+        st.dataframe(display, width="stretch", hide_index=True)

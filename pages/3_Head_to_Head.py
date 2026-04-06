@@ -96,7 +96,7 @@ else:
         textinfo="label+percent",
     ))
     fig.update_layout(height=350, showlegend=False)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 # ── Game log ──────────────────────────────────────────────────────────────────
 st.subheader("Game Log")
@@ -123,5 +123,5 @@ log = conn.execute(f"""
 if log.empty:
     st.info("No game log entries.")
 else:
-    st.dataframe(log, use_container_width=True, hide_index=True,
+    st.dataframe(log, width="stretch", hide_index=True,
                  column_config={"game_date": st.column_config.DateColumn("Date")})

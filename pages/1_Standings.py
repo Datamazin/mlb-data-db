@@ -72,7 +72,7 @@ for division in sorted(df["division_name"].unique()):
 
     st.dataframe(
         display,
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
         column_config={
             "PCT": st.column_config.NumberColumn(format="%.3f"),
@@ -95,4 +95,4 @@ fig = px.bar(
     text_auto=".3f",
 )
 fig.update_layout(height=600, yaxis_title=None, showlegend=True)
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig, width="stretch")

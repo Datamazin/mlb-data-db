@@ -83,7 +83,7 @@ def main() -> None:
     else:
         st.dataframe(
             recent,
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
             column_config={
                 "game_date": st.column_config.DateColumn("Date"),
@@ -112,7 +112,7 @@ def main() -> None:
     """).df()
 
     if not by_season.empty:
-        st.dataframe(by_season, use_container_width=True, hide_index=True)
+        st.dataframe(by_season, width="stretch", hide_index=True)
 
 
 if __name__ == "__main__":

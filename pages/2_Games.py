@@ -80,7 +80,7 @@ df = conn.execute(f"""
 st.write(f"{len(df):,} games")
 st.dataframe(
     df.drop(columns=["game_pk"]),
-    use_container_width=True,
+    width="stretch",
     hide_index=True,
     column_config={
         "game_date":    st.column_config.DateColumn("Date"),
@@ -125,4 +125,4 @@ if team_filter != "All" and not df.empty:
         labels={"game_date": "Date", "cumulative_rd": "Cumulative Run Diff"},
     )
     fig.add_hline(y=0, line_dash="dash", line_color="gray")
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
