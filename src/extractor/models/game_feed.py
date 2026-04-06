@@ -178,10 +178,24 @@ class Boxscore(BaseModel):
 
 # ── liveData top-level ────────────────────────────────────────────────────────
 
+class DecisionPitcher(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+    id: int | None = None
+    full_name: str | None = Field(None, alias="fullName")
+
+
+class Decisions(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+    winner: DecisionPitcher | None = None
+    loser: DecisionPitcher | None = None
+    save: DecisionPitcher | None = None
+
+
 class LiveData(BaseModel):
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
     linescore: Linescore | None = None
     boxscore: Boxscore | None = None
+    decisions: Decisions | None = None
     # plays (allPlays) intentionally omitted; captured as raw JSON in bronze
 
 

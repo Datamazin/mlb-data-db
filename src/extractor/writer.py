@@ -59,6 +59,9 @@ GAME_SCHEMA = pa.schema([
     pa.field("double_header",         pa.string()),
     pa.field("series_description",    pa.string()),
     pa.field("series_game_num",       pa.int32()),
+    pa.field("wp_id",                 pa.int32()),    # winning pitcher player_id
+    pa.field("lp_id",                 pa.int32()),    # losing pitcher player_id
+    pa.field("sv_id",                 pa.int32()),    # save pitcher player_id (nullable)
     pa.field("raw_json",              pa.string()),   # full API response blob
     pa.field("extracted_at",          pa.string()),   # UTC ISO-8601
     pa.field("source_url",            pa.string()),
@@ -234,6 +237,15 @@ def _int_or_none(v: Any) -> int | None:
     return int(v) if v is not None else None
 
 
+def _decision_id(feed_model: Any, decision: str) -> int | None:
+    """Return player_id for winner/loser/save from liveData.decisions, or None."""
+    decisions = getattr(feed_model.live_data, "decisions", None)
+    if decisions is None:
+        return None
+    pitcher = getattr(decisions, decision, None)
+    return pitcher.id if pitcher else None
+
+
 def game_feed_to_record(feed_model: Any, raw: dict[str, Any], source_url: str) -> dict[str, Any]:
     """Flatten a GameFeedResponse into a GAME_SCHEMA-compatible dict."""
     gd = feed_model.game_data
@@ -257,6 +269,9 @@ def game_feed_to_record(feed_model: Any, raw: dict[str, Any], source_url: str) -
         "double_header":         gd.game.double_header,
         "series_description":    gd.series_description,
         "series_game_num":       gd.series_game_number,
+        "wp_id":                 _decision_id(feed_model, "winner"),
+        "lp_id":                 _decision_id(feed_model, "loser"),
+        "sv_id":                 _decision_id(feed_model, "save"),
         "raw_json":              json.dumps(raw),
         "extracted_at":          _now_utc(),
         "source_url":            source_url,

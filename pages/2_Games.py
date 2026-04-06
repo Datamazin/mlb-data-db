@@ -5,6 +5,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+import json
+
 import pandas as pd
 import plotly.express as px
 import streamlit as st
@@ -115,13 +117,17 @@ if selected_rows:
     game = conn.execute("""
         SELECT away_team_name, away_team_abbrev, away_score,
                home_team_name, home_team_abbrev, home_score,
-               game_date, venue_name, innings
+               game_date, venue_name, innings,
+               wp_first_name, wp_last_name,
+               lp_first_name, lp_last_name,
+               sv_first_name, sv_last_name
         FROM gold.fact_game WHERE game_pk = ?
     """, [game_pk]).fetchone()
 
     if game:
-        away_name, away_abbrev, away_score, home_name, home_abbrev, home_score, \
-            game_date, venue_name, total_innings = game
+        (away_name, away_abbrev, away_score, home_name, home_abbrev, home_score,
+         game_date, venue_name, total_innings,
+         wp_first, wp_last, lp_first, lp_last, sv_first, sv_last) = game
 
         st.divider()
         st.subheader(
@@ -143,46 +149,191 @@ if selected_rows:
             max_inn = max(9, int(linescore["inning"].max()))
             innings_range = range(1, max_inn + 1)
 
-            # Build one row per team
-            away_row: dict = {"Team": away_abbrev}
-            home_row: dict = {"Team": home_abbrev}
-            for i in innings_range:
-                inn_data = linescore[linescore["inning"] == i]
-                if inn_data.empty:
-                    away_row[str(i)] = "-"
-                    home_row[str(i)] = "-"
-                else:
-                    away_row[str(i)] = str(int(inn_data["away_runs"].iloc[0]))
-                    home_row[str(i)] = str(int(inn_data["home_runs"].iloc[0]))
+            away_r = int(linescore["away_runs"].sum())
+            away_h = int(linescore["away_hits"].sum())
+            away_e = int(linescore["away_errors"].sum())
+            home_r = int(linescore["home_runs"].sum())
+            home_h = int(linescore["home_hits"].sum())
+            home_e = int(linescore["home_errors"].sum())
 
-            # Totals
-            away_row["R"] = str(int(linescore["away_runs"].sum()))
-            away_row["H"] = str(int(linescore["away_hits"].sum()))
-            away_row["E"] = str(int(linescore["away_errors"].sum()))
-            home_row["R"] = str(int(linescore["home_runs"].sum()))
-            home_row["H"] = str(int(linescore["home_hits"].sum()))
-            home_row["E"] = str(int(linescore["home_errors"].sum()))
+            def inn_cell(df: pd.DataFrame, inning: int, col: str) -> str:
+                row = df[df["inning"] == inning]
+                return "-" if row.empty else str(int(row[col].iloc[0]))
 
-            ls_df = pd.DataFrame([away_row, home_row]).set_index("Team")
-            st.dataframe(ls_df, width="stretch")
+            css = """
+<style>
+.ls-wrap { overflow-x: auto; }
+table.linescore {
+    border-collapse: collapse;
+    font-family: sans-serif;
+    font-size: 14px;
+    width: 100%;
+}
+table.linescore th, table.linescore td {
+    padding: 6px 10px;
+    text-align: center;
+    border: 1px solid #3a3a3a;
+    min-width: 30px;
+}
+table.linescore th {
+    background: #1e1e1e;
+    color: #aaa;
+    font-weight: 600;
+}
+table.linescore td.team-name {
+    text-align: left;
+    font-weight: 700;
+    color: #e0e0e0;
+    white-space: nowrap;
+    min-width: 80px;
+}
+table.linescore td {
+    color: #d0d0d0;
+    background: #141414;
+}
+table.linescore td.total {
+    font-weight: 700;
+    color: #ffffff;
+    background: #1a1a2e;
+    border-left: 2px solid #555;
+}
+table.linescore th.total {
+    border-left: 2px solid #555;
+    color: #fff;
+}
+table.linescore tr:hover td { background: #222; }
+table.linescore tr:hover td.total { background: #1f1f3a; }
+</style>
+"""
+            inn_headers = "".join(f"<th>{i}</th>" for i in innings_range)
+            away_cells  = "".join(
+                f"<td>{inn_cell(linescore, i, 'away_runs')}</td>" for i in innings_range
+            )
+            home_cells  = "".join(
+                f"<td>{inn_cell(linescore, i, 'home_runs')}</td>" for i in innings_range
+            )
+
+            html = f"""
+{css}
+<div class="ls-wrap">
+<table class="linescore">
+  <thead>
+    <tr>
+      <th style="text-align:left">Team</th>
+      {inn_headers}
+      <th class="total">R</th><th class="total">H</th><th class="total">E</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="team-name">{away_abbrev}</td>
+      {away_cells}
+      <td class="total">{away_r}</td><td class="total">{away_h}</td><td class="total">{away_e}</td>
+    </tr>
+    <tr>
+      <td class="team-name">{home_abbrev}</td>
+      {home_cells}
+      <td class="total">{home_r}</td><td class="total">{home_h}</td><td class="total">{home_e}</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+"""
+            st.markdown(html, unsafe_allow_html=True)
+
+            # W / L / S pitcher line
+            decisions: list[str] = []
+            if wp_last:
+                decisions.append(f"**W:** {wp_first[0]}. {wp_last}" if wp_first else f"**W:** {wp_last}")
+            if lp_last:
+                decisions.append(f"**L:** {lp_first[0]}. {lp_last}" if lp_first else f"**L:** {lp_last}")
+            if sv_last:
+                decisions.append(f"**S:** {sv_first[0]}. {sv_last}" if sv_first else f"**S:** {sv_last}")
+            if decisions:
+                st.caption("  \u2003".join(decisions))
         else:
             st.info("Linescore not available for this game.")
 
-        # Team totals
-        boxscore = conn.execute("""
-            SELECT t.team_abbrev, b.is_home,
-                   b.runs, b.hits, b.errors, b.left_on_base
-            FROM silver.game_boxscore b
-            JOIN silver.teams t ON b.team_id = t.team_id
-              AND t.season_year = (SELECT season_year FROM silver.games WHERE game_pk = ?)
-            WHERE b.game_pk = ?
-            ORDER BY b.is_home
-        """, [game_pk, game_pk]).df()
+        # Boxscore toggle — per-player batting stats from raw bronze JSON
+        show_boxscore = st.checkbox("Show Boxscore", key=f"boxscore_{game_pk}")
+        if show_boxscore:
+            raw_row = conn.execute(f"""
+                SELECT raw_json FROM read_parquet(
+                    'data/bronze/games/year={game_date.year}/month={game_date.month:02d}/*.parquet',
+                    union_by_name=true
+                )
+                WHERE game_pk = {game_pk}
+                LIMIT 1
+            """).fetchone()
 
-        if not boxscore.empty:
-            boxscore = boxscore.drop(columns=["is_home"])
-            boxscore.columns = ["Team", "R", "H", "E", "LOB"]
-            st.dataframe(boxscore, hide_index=True)
+            if raw_row:
+                feed = json.loads(raw_row[0])
+                bs_teams = (
+                    feed.get("liveData", {})
+                        .get("boxscore", {})
+                        .get("teams", {})
+                )
+
+                def batting_table(side: str) -> pd.DataFrame:
+                    section = bs_teams.get(side, {})
+                    players = section.get("players", {})
+                    order = section.get("battingOrder", [])
+                    rows = []
+                    for pid in order:
+                        p = players.get(f"ID{pid}", {})
+                        name = p.get("person", {}).get("fullName", "")
+                        pos  = p.get("position", {}).get("abbreviation", "")
+                        bat_ord = str(p.get("battingOrder", "0"))
+                        is_sub = int(bat_ord) % 100 != 0
+                        b = p.get("stats", {}).get("batting", {})
+                        rows.append({
+                            "Batter":  f"  {name}" if is_sub else name,
+                            "Pos":  pos,
+                            "AB":   b.get("atBats", 0),
+                            "R":    b.get("runs", 0),
+                            "H":    b.get("hits", 0),
+                            "2B":   b.get("doubles", 0),
+                            "3B":   b.get("triples", 0),
+                            "HR":   b.get("homeRuns", 0),
+                            "RBI":  b.get("rbi", 0),
+                            "BB":   b.get("baseOnBalls", 0),
+                            "SO":   b.get("strikeOuts", 0),
+                            "LOB":  b.get("leftOnBase", 0),
+                        })
+                    return pd.DataFrame(rows)
+
+                away_bat = batting_table("away")
+                home_bat = batting_table("home")
+
+                _bat_col_cfg = {
+                    "Batter": st.column_config.TextColumn("Batter", width=140),
+                    "Pos":    st.column_config.TextColumn("Pos",    width=36),
+                    "AB":     st.column_config.NumberColumn("AB",   width=36),
+                    "R":      st.column_config.NumberColumn("R",    width=36),
+                    "H":      st.column_config.NumberColumn("H",    width=36),
+                    "2B":     st.column_config.NumberColumn("2B",   width=36),
+                    "3B":     st.column_config.NumberColumn("3B",   width=36),
+                    "HR":     st.column_config.NumberColumn("HR",   width=36),
+                    "RBI":    st.column_config.NumberColumn("RBI",  width=40),
+                    "BB":     st.column_config.NumberColumn("BB",   width=36),
+                    "SO":     st.column_config.NumberColumn("SO",   width=36),
+                    "LOB":    st.column_config.NumberColumn("LOB",  width=40),
+                }
+
+                if not away_bat.empty or not home_bat.empty:
+                    col_a, col_h = st.columns(2)
+                    with col_a:
+                        st.caption(f"**{away_name}**")
+                        st.dataframe(away_bat, hide_index=True, use_container_width=True,
+                                     column_config=_bat_col_cfg)
+                    with col_h:
+                        st.caption(f"**{home_name}**")
+                        st.dataframe(home_bat, hide_index=True, use_container_width=True,
+                                     column_config=_bat_col_cfg)
+                else:
+                    st.info("Batting stats not available for this game.")
+            else:
+                st.info("Raw game data not found in bronze for this game.")
 
 # ── Run-differential chart for selected team ──────────────────────────────────
 if team_filter != "All" and not df.empty:
