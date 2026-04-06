@@ -20,7 +20,7 @@ if conn is None:
     st.stop()
 
 # ── Filters ───────────────────────────────────────────────────────────────────
-col1, col2, col3 = st.columns(3)
+col1, col2, col3, col4 = st.columns(4)
 
 seasons = [r[0] for r in conn.execute(
     "SELECT DISTINCT season_year FROM gold.fact_game ORDER BY season_year DESC"
@@ -46,6 +46,9 @@ teams = [r[0] for r in conn.execute("""
 with col3:
     team_filter = st.selectbox("Team", ["All"] + teams)
 
+with col4:
+    home_team_filter = st.selectbox("Home Team", ["All"] + teams)
+
 # ── Build query ───────────────────────────────────────────────────────────────
 where = ["season_year = ?", "status = 'Final'"]
 params: list = [season]
@@ -57,6 +60,10 @@ if game_type_label != "All":
 if team_filter != "All":
     where.append("(home_team_name = ? OR away_team_name = ?)")
     params.extend([team_filter, team_filter])
+
+if home_team_filter != "All":
+    where.append("home_team_name = ?")
+    params.append(home_team_filter)
 
 where_clause = " AND ".join(where)
 
