@@ -5,8 +5,6 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import json
-
 import pandas as pd
 import plotly.express as px
 import streamlit as st
@@ -104,7 +102,7 @@ event = st.dataframe(
         "venue_name":   "Venue",
         "game_type":    "Type",
         "innings":      "Inn",
-        "attendance":   st.column_config.NumberColumn("Att", format="%d"),
+        "attendance":   st.column_config.NumberColumn("Att", format="%,d"),
         "duration_min": "Min",
     },
 )
@@ -254,86 +252,63 @@ table.linescore tr:hover td.total { background: #1f1f3a; }
         else:
             st.info("Linescore not available for this game.")
 
-        # Boxscore toggle — per-player batting stats from raw bronze JSON
+        # Boxscore toggle — per-player batting stats from silver.game_batting
         show_boxscore = st.checkbox("Show Boxscore", key=f"boxscore_{game_pk}")
         if show_boxscore:
-            raw_row = conn.execute(f"""
-                SELECT raw_json FROM read_parquet(
-                    'data/bronze/games/year={game_date.year}/month={game_date.month:02d}/*.parquet',
-                    union_by_name=true
-                )
-                WHERE game_pk = {game_pk}
-                LIMIT 1
-            """).fetchone()
+            _bat_col_cfg = {
+                "Batter": st.column_config.TextColumn("Batter", width=140),
+                "Pos":    st.column_config.TextColumn("Pos",    width=36),
+                "AB":     st.column_config.NumberColumn("AB",   width=36),
+                "R":      st.column_config.NumberColumn("R",    width=36),
+                "H":      st.column_config.NumberColumn("H",    width=36),
+                "2B":     st.column_config.NumberColumn("2B",   width=36),
+                "3B":     st.column_config.NumberColumn("3B",   width=36),
+                "HR":     st.column_config.NumberColumn("HR",   width=36),
+                "RBI":    st.column_config.NumberColumn("RBI",  width=40),
+                "BB":     st.column_config.NumberColumn("BB",   width=36),
+                "SO":     st.column_config.NumberColumn("SO",   width=36),
+                "LOB":    st.column_config.NumberColumn("LOB",  width=40),
+            }
 
-            if raw_row:
-                feed = json.loads(raw_row[0])
-                bs_teams = (
-                    feed.get("liveData", {})
-                        .get("boxscore", {})
-                        .get("teams", {})
-                )
+            def _fetch_batting(is_home: bool) -> pd.DataFrame:
+                return conn.execute("""
+                    SELECT
+                        CASE WHEN gb.batting_order % 100 != 0
+                             THEN '  ' || p.full_name
+                             ELSE p.full_name
+                        END                  AS "Batter",
+                        gb.position_abbrev   AS "Pos",
+                        gb.at_bats           AS "AB",
+                        gb.runs              AS "R",
+                        gb.hits              AS "H",
+                        gb.doubles           AS "2B",
+                        gb.triples           AS "3B",
+                        gb.home_runs         AS "HR",
+                        gb.rbi               AS "RBI",
+                        gb.walks             AS "BB",
+                        gb.strikeouts        AS "SO",
+                        gb.left_on_base      AS "LOB"
+                    FROM silver.game_batting gb
+                    JOIN silver.players p ON gb.player_id = p.player_id
+                    WHERE gb.game_pk = ? AND gb.is_home = ?
+                    ORDER BY gb.batting_order NULLS LAST
+                """, [game_pk, is_home]).df()
 
-                def batting_table(side: str) -> pd.DataFrame:
-                    section = bs_teams.get(side, {})
-                    players = section.get("players", {})
-                    order = section.get("battingOrder", [])
-                    rows = []
-                    for pid in order:
-                        p = players.get(f"ID{pid}", {})
-                        name = p.get("person", {}).get("fullName", "")
-                        pos  = p.get("position", {}).get("abbreviation", "")
-                        bat_ord = str(p.get("battingOrder", "0"))
-                        is_sub = int(bat_ord) % 100 != 0
-                        b = p.get("stats", {}).get("batting", {})
-                        rows.append({
-                            "Batter":  f"  {name}" if is_sub else name,
-                            "Pos":  pos,
-                            "AB":   b.get("atBats", 0),
-                            "R":    b.get("runs", 0),
-                            "H":    b.get("hits", 0),
-                            "2B":   b.get("doubles", 0),
-                            "3B":   b.get("triples", 0),
-                            "HR":   b.get("homeRuns", 0),
-                            "RBI":  b.get("rbi", 0),
-                            "BB":   b.get("baseOnBalls", 0),
-                            "SO":   b.get("strikeOuts", 0),
-                            "LOB":  b.get("leftOnBase", 0),
-                        })
-                    return pd.DataFrame(rows)
+            away_bat = _fetch_batting(False)
+            home_bat = _fetch_batting(True)
 
-                away_bat = batting_table("away")
-                home_bat = batting_table("home")
-
-                _bat_col_cfg = {
-                    "Batter": st.column_config.TextColumn("Batter", width=140),
-                    "Pos":    st.column_config.TextColumn("Pos",    width=36),
-                    "AB":     st.column_config.NumberColumn("AB",   width=36),
-                    "R":      st.column_config.NumberColumn("R",    width=36),
-                    "H":      st.column_config.NumberColumn("H",    width=36),
-                    "2B":     st.column_config.NumberColumn("2B",   width=36),
-                    "3B":     st.column_config.NumberColumn("3B",   width=36),
-                    "HR":     st.column_config.NumberColumn("HR",   width=36),
-                    "RBI":    st.column_config.NumberColumn("RBI",  width=40),
-                    "BB":     st.column_config.NumberColumn("BB",   width=36),
-                    "SO":     st.column_config.NumberColumn("SO",   width=36),
-                    "LOB":    st.column_config.NumberColumn("LOB",  width=40),
-                }
-
-                if not away_bat.empty or not home_bat.empty:
-                    col_a, col_h = st.columns(2)
-                    with col_a:
-                        st.caption(f"**{away_name}**")
-                        st.dataframe(away_bat, hide_index=True, use_container_width=True,
-                                     column_config=_bat_col_cfg)
-                    with col_h:
-                        st.caption(f"**{home_name}**")
-                        st.dataframe(home_bat, hide_index=True, use_container_width=True,
-                                     column_config=_bat_col_cfg)
-                else:
-                    st.info("Batting stats not available for this game.")
+            if not away_bat.empty or not home_bat.empty:
+                col_a, col_h = st.columns(2)
+                with col_a:
+                    st.caption(f"**{away_name}**")
+                    st.dataframe(away_bat, hide_index=True, use_container_width=True,
+                                 column_config=_bat_col_cfg)
+                with col_h:
+                    st.caption(f"**{home_name}**")
+                    st.dataframe(home_bat, hide_index=True, use_container_width=True,
+                                 column_config=_bat_col_cfg)
             else:
-                st.info("Raw game data not found in bronze for this game.")
+                st.info("Batting stats not available for this game.")
 
 # ── Run-differential chart for selected team ──────────────────────────────────
 if team_filter != "All" and not df.empty:
