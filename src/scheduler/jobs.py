@@ -1,17 +1,21 @@
 """
 M6 — Scheduled pipeline jobs.
 
-Three recurring jobs:
+Four recurring jobs:
 
   nightly_incremental   02:00 ET daily (Mar–Nov)
       Extract prior-day games, transform bronze→silver, aggregate silver→gold.
 
+  standings_snapshot    03:00 ET daily (Apr–Oct)
+      Recompute gold.standings_snap from all Final regular-season games.
+
+  publish_duckdb        04:00 ET daily (Mar–Nov)
+      Commit and push data/gold/mlb.duckdb to GitHub so Streamlit Community
+      Cloud picks up the latest data automatically.
+
   roster_sync           06:00 ET daily
       Pull 40-man rosters + player bios for the current season;
       re-run silver transform so silver.players stays current.
-
-  standings_snapshot    03:00 ET daily (Apr–Oct)
-      Recompute gold.standings_snap from all Final regular-season games.
 
 Each job:
   - Opens its own DuckDB connection (safe for single-process async use)
@@ -23,12 +27,14 @@ Scheduler entry point:
     uv run python -m src.scheduler.jobs --run nightly_incremental
     uv run python -m src.scheduler.jobs --run roster_sync
     uv run python -m src.scheduler.jobs --run standings_snapshot
+    uv run python -m src.scheduler.jobs --run publish_duckdb
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import subprocess
 import sys
 from datetime import date, timedelta
 from pathlib import Path
@@ -280,6 +286,56 @@ async def standings_snapshot(
         conn.close()
 
 
+# ── Job: Publish DuckDB ────────────────────────────────────────────────────────
+
+async def publish_duckdb(
+    db_path: Path = DB_PATH,
+) -> None:
+    """
+    Commit and push data/gold/mlb.duckdb to GitHub.
+
+    Streamlit Community Cloud watches the repo and redeploys automatically,
+    so this keeps the hosted app in sync with the latest nightly data.
+
+    Runs at 04:00 ET daily (after nightly_incremental at 02:00 and
+    standings_snapshot at 03:00 have both completed).
+
+    Skips the commit if there are no changes to the file.
+    """
+    log.info("publish_duckdb_start", db_path=str(db_path))
+
+    repo_root = Path(__file__).parent.parent.parent
+
+    def _run(cmd: list[str]) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            cmd, cwd=repo_root, capture_output=True, text=True, check=True
+        )
+
+    try:
+        # Check if mlb.duckdb has changed since last commit
+        diff = _run(["git", "diff", "--name-only", str(db_path)])
+        diff_cached = _run(["git", "diff", "--cached", "--name-only", str(db_path)])
+
+        if not diff.stdout.strip() and not diff_cached.stdout.strip():
+            log.info("publish_duckdb_no_changes")
+            return
+
+        today = date.today().isoformat()
+        _run(["git", "add", str(db_path)])
+        _run(["git", "commit", "-m", f"chore: update mlb.duckdb [{today}]"])
+        _run(["git", "push"])
+
+        log.info("publish_duckdb_done", date=today)
+
+    except subprocess.CalledProcessError as exc:
+        log.error(
+            "publish_duckdb_failed",
+            cmd=" ".join(exc.cmd),
+            stderr=exc.stderr.strip(),
+        )
+        raise
+
+
 # ── Scheduler wiring ───────────────────────────────────────────────────────────
 
 def build_scheduler() -> AsyncIOScheduler:
@@ -322,6 +378,16 @@ def build_scheduler() -> AsyncIOScheduler:
         coalesce=True,
     )
 
+    # Publish DuckDB — 04:00 ET, March–November (after nightly + standings)
+    scheduler.add_job(
+        publish_duckdb,
+        CronTrigger(hour=4, minute=0, month="3-11", timezone=tz),
+        id="publish_duckdb",
+        name="Publish DuckDB",
+        misfire_grace_time=3600,
+        coalesce=True,
+    )
+
     return scheduler
 
 
@@ -333,7 +399,7 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--run",
-        choices=["nightly_incremental", "roster_sync", "standings_snapshot"],
+        choices=["nightly_incremental", "roster_sync", "standings_snapshot", "publish_duckdb"],
         default=None,
         metavar="JOB",
         help="Run a single job immediately and exit (default: start the daemon)",
@@ -388,6 +454,8 @@ async def _run_once(args: argparse.Namespace) -> None:
         )
     elif args.run == "standings_snapshot":
         await standings_snapshot(db_path=args.db)
+    elif args.run == "publish_duckdb":
+        await publish_duckdb(db_path=args.db)
 
 
 def main() -> None:
