@@ -3,17 +3,17 @@
   "configurations": [
     {
       "name": "explore-api",
-      "runtimeExecutable": "uv",
+      "runtimeExecutable": "/opt/homebrew/bin/uv",
       "runtimeArgs": ["run", "python", "scripts/explore_api.py"]
     },
     {
       "name": "migrate",
-      "runtimeExecutable": "uv",
+      "runtimeExecutable": "/opt/homebrew/bin/uv",
       "runtimeArgs": ["run", "python", "migrations/migrate.py"]
     },
     {
       "name": "backfill",
-      "runtimeExecutable": "uv",
+      "runtimeExecutable": "/opt/homebrew/bin/uv",
       "runtimeArgs": ["run", "python", "-m", "src.extractor.backfill"]
     }
   ]
