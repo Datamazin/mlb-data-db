@@ -15,6 +15,10 @@ on:
           - nightly_incremental
           - roster_sync
           - standings_snapshot
+      date:
+        description: "Target date for nightly_incremental (YYYY-MM-DD, default: yesterday)"
+        required: false
+        default: ""
 
 jobs:
   run-pipeline:
@@ -42,7 +46,11 @@ jobs:
       - name: Run pipeline job
         run: |
           JOB="${{ inputs.job || 'nightly_incremental' }}"
-          uv run python -m src.scheduler.jobs --run $JOB
+          ARGS="--run $JOB"
+          if [ -n "${{ inputs.date }}" ]; then
+            ARGS="$ARGS --date ${{ inputs.date }}"
+          fi
+          uv run python -m src.scheduler.jobs $ARGS
 
       - name: Run silver transform
         if: ${{ inputs.job == '' || inputs.job == 'nightly_incremental' }}
