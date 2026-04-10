@@ -194,7 +194,7 @@ async def backfill_season(
             errors.append((months[i], result))
             log.error("backfill_month_error", month=months[i][0].strftime("%Y-%m"), error=str(result))
         else:
-            found, extracted = result
+            found, extracted = result  # type: ignore[misc]
             total_found += found
             total_extracted += extracted
 

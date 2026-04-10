@@ -55,7 +55,7 @@ class CheckResult:
     name: str
     ok: bool
     message: str
-    details: dict = field(default_factory=dict)
+    details: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass
@@ -71,7 +71,7 @@ class HealthReport:
     def failures(self) -> list[CheckResult]:
         return [c for c in self.checks if not c.ok]
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, object]:
         return {
             "generated_at": self.generated_at.isoformat(),
             "healthy": self.healthy,
@@ -144,7 +144,7 @@ class HealthChecker:
             ).fetchone()
             if any_row is None:
                 msg = f"No successful run found for '{spec.job_name}'"
-                details: dict = {"last_success": None}
+                details: dict[str, object] = {"last_success": None}
             else:
                 age_h = (self._now - any_row[0]).total_seconds() / 3600
                 msg = (
@@ -318,9 +318,8 @@ class HealthChecker:
         Returns ok=True with a warning message (not a hard failure) so that
         a freshly migrated DB without data loaded doesn't raise a false alarm.
         """
-        silver_games = self._conn.execute(
-            "SELECT COUNT(*) FROM silver.games"
-        ).fetchone()[0]
+        row = self._conn.execute("SELECT COUNT(*) FROM silver.games").fetchone()
+        silver_games = row[0] if row is not None else 0
 
         if silver_games == 0:
             return CheckResult(
