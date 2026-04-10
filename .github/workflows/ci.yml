@@ -10,6 +10,8 @@ jobs:
   test:
     name: Test suite (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     strategy:
       matrix:
         python-version: ["3.12"]
@@ -41,6 +43,8 @@ jobs:
   benchmark:
     name: Benchmark suite
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     # Only run benchmarks on push to main — they're slow (~3 min)
     if: github.ref == 'refs/heads/main'
 
