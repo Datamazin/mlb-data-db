@@ -1,0 +1,63 @@
+name: Historical Backfill
+
+on:
+  workflow_dispatch:
+    inputs:
+      seasons:
+        description: "Space-separated season years to backfill (e.g. '2022' or '2022 2023 2024 2025')"
+        required: true
+        default: "2022"
+      dry_run:
+        description: "Dry run — print what would be extracted without writing data"
+        type: boolean
+        default: false
+      skip_transform:
+        description: "Skip silver transform + gold aggregation after extraction"
+        type: boolean
+        default: false
+
+jobs:
+  backfill:
+    name: Backfill seasons ${{ inputs.seasons }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 360   # full 5-season backfill can take ~4 hrs
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --all-groups
+
+      - name: Apply schema migrations
+        run: uv run python migrations/migrate.py
+
+      - name: Run backfill
+        run: |
+          ARGS="${{ inputs.seasons }}"
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            ARGS="$ARGS --dry-run"
+          fi
+          uv run python -m src.extractor.backfill --seasons $ARGS
+
+      - name: Run silver transform
+        if: ${{ inputs.dry_run == false && inputs.skip_transform == false }}
+        run: uv run python -m src.transformer.transform
+
+      - name: Run gold aggregation
+        if: ${{ inputs.dry_run == false && inputs.skip_transform == false }}
+        run: uv run python -m src.aggregator.aggregate
+
+      - name: Upload mlb.duckdb artifact
+        if: ${{ inputs.dry_run == false && inputs.skip_transform == false }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-duckdb-${{ github.run_id }}
+          path: data/gold/mlb.duckdb
+          retention-days: 7
+          if-no-files-found: warn

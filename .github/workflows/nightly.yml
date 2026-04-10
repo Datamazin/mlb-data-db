@@ -1,0 +1,59 @@
+name: Nightly Incremental Pipeline
+
+on:
+  schedule:
+    # 02:00 ET = 07:00 UTC (Mar–Nov active season)
+    - cron: "0 7 * * *"
+  workflow_dispatch:
+    inputs:
+      job:
+        description: "Pipeline job to run"
+        required: true
+        default: "nightly_incremental"
+        type: choice
+        options:
+          - nightly_incremental
+          - roster_sync
+          - standings_snapshot
+
+jobs:
+  run-pipeline:
+    name: ${{ inputs.job || 'nightly_incremental' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --all-groups
+
+      - name: Apply schema migrations
+        run: uv run python migrations/migrate.py
+
+      - name: Run pipeline job
+        run: |
+          JOB="${{ inputs.job || 'nightly_incremental' }}"
+          uv run python -m src.scheduler.jobs --run-once $JOB
+
+      - name: Run silver transform
+        if: ${{ inputs.job == '' || inputs.job == 'nightly_incremental' }}
+        run: uv run python -m src.transformer.transform
+
+      - name: Run gold aggregation
+        if: ${{ inputs.job == '' || inputs.job == 'nightly_incremental' }}
+        run: uv run python -m src.aggregator.aggregate
+
+      - name: Upload mlb.duckdb artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-duckdb-nightly-${{ github.run_id }}
+          path: data/gold/mlb.duckdb
+          retention-days: 3
+          if-no-files-found: warn
