@@ -40,7 +40,7 @@ jobs:
       - name: Run pipeline job
         run: |
           JOB="${{ inputs.job || 'nightly_incremental' }}"
-          uv run python -m src.scheduler.jobs --run-once $JOB
+          uv run python -m src.scheduler.jobs --run $JOB
 
       - name: Run silver transform
         if: ${{ inputs.job == '' || inputs.job == 'nightly_incremental' }}
