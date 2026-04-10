@@ -13,13 +13,11 @@ from __future__ import annotations
 from datetime import date
 
 import duckdb
-import pytest
 
 from extractor.writer import (
-    BronzeWriter,
     GAME_SCHEMA,
     PLAYER_SCHEMA,
-    TEAM_SCHEMA,
+    BronzeWriter,
     _now_utc,
 )
 

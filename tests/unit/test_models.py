@@ -12,13 +12,10 @@ is the right tool for discovering what extra fields exist in the live API.
 
 from __future__ import annotations
 
-import pytest
-
 from extractor.models.game_feed import GameFeedResponse
 from extractor.models.player import PersonResponse
 from extractor.models.schedule import ScheduleResponse
 from extractor.models.team import RosterResponse, TeamsResponse
-
 
 # ── Schedule ───────────────────────────────────────────────────────────────────
 

@@ -61,10 +61,9 @@ def db_file_path(tmp_path: Path) -> tuple[Path, duckdb.DuckDBPyConnection]:
     for migration in sorted(MIGRATIONS_DIR.glob("*.sql")):
         conn.execute(migration.read_text(encoding="utf-8"))
     yield db_path, conn
-    try:
+    import contextlib
+    with contextlib.suppress(Exception):
         conn.close()
-    except Exception:
-        pass  # already closed by the test
 
 
 @pytest.fixture

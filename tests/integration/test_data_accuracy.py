@@ -44,9 +44,6 @@ from __future__ import annotations
 
 import re
 
-import pytest
-
-
 # ── Fixtures & seed helpers ───────────────────────────────────────────────────
 
 def _seed_two_teams(db, *, n_games: int = 10, season_year: int = 2024):

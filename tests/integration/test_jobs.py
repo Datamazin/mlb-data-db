@@ -9,13 +9,11 @@ logic by pre-seeding silver tables and verifying gold state.
 from __future__ import annotations
 
 from datetime import date
-from pathlib import Path
 
 import duckdb
 import pytest
 
 from scheduler.jobs import nightly_incremental, roster_sync, standings_snapshot
-
 
 # ── Silver seeding helpers ────────────────────────────────────────────────────
 
@@ -321,8 +319,8 @@ class TestSchedulerWiring:
         return {job.id: job.trigger for job, *_ in scheduler._pending_jobs}
 
     def test_all_three_jobs_registered(self):
+
         from scheduler.jobs import build_scheduler
-        from apscheduler.triggers.cron import CronTrigger
         scheduler = build_scheduler()
         pending = self._pending_map(scheduler)
         assert "nightly_incremental" in pending
@@ -330,8 +328,9 @@ class TestSchedulerWiring:
         assert "standings_snapshot" in pending
 
     def test_nightly_incremental_fires_at_2am(self):
-        from scheduler.jobs import build_scheduler
         from apscheduler.triggers.cron import CronTrigger
+
+        from scheduler.jobs import build_scheduler
         scheduler = build_scheduler()
         trigger = self._pending_map(scheduler)["nightly_incremental"]
         assert isinstance(trigger, CronTrigger)
@@ -340,8 +339,9 @@ class TestSchedulerWiring:
         assert str(hour_field) == "2"
 
     def test_standings_snapshot_april_to_october(self):
-        from scheduler.jobs import build_scheduler
         from apscheduler.triggers.cron import CronTrigger
+
+        from scheduler.jobs import build_scheduler
         scheduler = build_scheduler()
         trigger = self._pending_map(scheduler)["standings_snapshot"]
         assert isinstance(trigger, CronTrigger)
@@ -351,8 +351,8 @@ class TestSchedulerWiring:
         assert "10" in str(month_field)
 
     def test_nightly_incremental_seasonal_gate(self):
+
         from scheduler.jobs import build_scheduler
-        from apscheduler.triggers.cron import CronTrigger
         scheduler = build_scheduler()
         trigger = self._pending_map(scheduler)["nightly_incremental"]
         month_field = next(f for f in trigger.fields if f.name == "month")

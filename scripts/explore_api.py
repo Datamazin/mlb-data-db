@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import json
 import sys
 from datetime import date, timedelta
 from pathlib import Path
@@ -88,7 +87,6 @@ def _ignored_keys(raw: dict[str, Any], model: Any) -> list[str]:
             model_aliases.add(field.alias)
         model_aliases.add(field.title or "")
     # Simple check: any top-level key not represented in the model dict
-    captured = set(model.model_dump().keys())
     # Map snake_case captured keys back — just show raw keys not in alias set
     # Since extra='ignore' we note any raw top-level key whose camelCase
     # isn't an alias in the model.
@@ -315,7 +313,7 @@ def print_summary(game_pks: list[int], season: int) -> None:
   it is safe to proceed to M3 (historical back-fill).
 """)
     if game_pks:
-        print(f"  Sample gamePks for further manual inspection:")
+        print("  Sample gamePks for further manual inspection:")
         for pk in game_pks[:5]:
             print(f"    https://statsapi.mlb.com/api/v1.1/game/{pk}/feed/live")
 
@@ -326,7 +324,7 @@ async def main(args: argparse.Namespace) -> None:
     target_date = args.date or (date.today() - timedelta(days=1))
     season = args.season or target_date.year
 
-    print(f"\nMLB Stats API — Model Validation Probes")
+    print("\nMLB Stats API — Model Validation Probes")
     print(f"Target date : {target_date}")
     print(f"Season      : {season}")
 

@@ -9,14 +9,13 @@ are used as transform inputs.
 from __future__ import annotations
 
 import json
-from datetime import date, datetime, timezone
+from datetime import date
 from pathlib import Path
 
 import duckdb
-import pytest
 
 from extractor.writer import BronzeWriter, _now_utc
-from transformer.transform import Transformer, TransformResult
+from transformer.transform import Transformer
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -533,7 +532,7 @@ class TestTransformerRunner:
 
     def test_dry_run_does_not_write(self, db, bronze_path):
         t = _transformer(db, bronze_path)
-        result = t.run(scripts=["001_seed_seasons.sql"], dry_run=True)
+        t.run(scripts=["001_seed_seasons.sql"], dry_run=True)
         assert db.execute("SELECT COUNT(*) FROM silver.seasons").fetchone()[0] == 0
 
     def test_checksum_skips_unchanged_script(self, db, bronze_path):

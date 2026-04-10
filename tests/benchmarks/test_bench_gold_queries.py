@@ -36,20 +36,16 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
-from typing import Generator
 
 import duckdb
 import pytest
-
-from aggregator.aggregate import Aggregator
-
 
 # ── Timing helper ──────────────────────────────────────────────────────────────
 
 class _Timer:
     """Context manager that measures wall-clock elapsed time in milliseconds."""
 
-    def __enter__(self) -> "_Timer":
+    def __enter__(self) -> _Timer:
         self._start = time.perf_counter()
         return self
 

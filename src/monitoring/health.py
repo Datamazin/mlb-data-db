@@ -27,7 +27,7 @@ import argparse
 import json
 import sys
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import duckdb
@@ -112,7 +112,7 @@ class HealthChecker:
     ) -> None:
         self._conn = conn
         self._db_path = db_path
-        self._now = now or datetime.now(timezone.utc)
+        self._now = now or datetime.now(UTC)
 
     # ── Individual checks ──────────────────────────────────────────────────────
 
@@ -244,7 +244,7 @@ class HealthChecker:
         # Convert date → datetime for age calculation
         latest_dt = datetime(
             latest_date.year, latest_date.month, latest_date.day,
-            tzinfo=timezone.utc,
+            tzinfo=UTC,
         )
         age_h = (self._now - latest_dt).total_seconds() / 3600
 

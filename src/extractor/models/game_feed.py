@@ -15,7 +15,6 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
-
 # ── Shared helpers ────────────────────────────────────────────────────────────
 
 class _Ref(BaseModel):

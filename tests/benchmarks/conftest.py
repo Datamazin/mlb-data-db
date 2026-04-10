@@ -116,11 +116,6 @@ def _seed_reference_tables(conn: duckdb.DuckDBPyConnection) -> None:
     )
 
     # Teams × seasons
-    team_rows = [
-        (team_id, season_year, name, abbrev, div_id, team_id)
-        for team_id, div_id, name, abbrev in _TEAM_NAMES
-        for season_year in SEASONS
-    ]
     conn.executemany(
         """INSERT OR REPLACE INTO silver.teams
                (team_id, season_year, team_name, team_abbrev, team_code,

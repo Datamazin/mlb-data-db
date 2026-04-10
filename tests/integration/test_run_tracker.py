@@ -9,7 +9,6 @@ from __future__ import annotations
 import time
 
 import duckdb
-import pytest
 
 from run_tracker.tracker import RunTracker
 
@@ -169,28 +168,32 @@ class TestBackfillHelpers:
     """Test the month-splitting utility used by the back-fill job."""
 
     def test_month_ranges_single_month(self):
-        from extractor.backfill import _month_ranges
         from datetime import date
+
+        from extractor.backfill import _month_ranges
         ranges = _month_ranges(date(2024, 7, 1), date(2024, 7, 31))
         assert len(ranges) == 1
         assert ranges[0] == (date(2024, 7, 1), date(2024, 7, 31))
 
     def test_month_ranges_partial_start(self):
-        from extractor.backfill import _month_ranges
         from datetime import date
+
+        from extractor.backfill import _month_ranges
         ranges = _month_ranges(date(2024, 3, 20), date(2024, 4, 30))
         assert ranges[0] == (date(2024, 3, 20), date(2024, 3, 31))
         assert ranges[1] == (date(2024, 4, 1), date(2024, 4, 30))
 
     def test_month_ranges_partial_end(self):
-        from extractor.backfill import _month_ranges
         from datetime import date
+
+        from extractor.backfill import _month_ranges
         ranges = _month_ranges(date(2024, 9, 1), date(2024, 10, 15))
         assert ranges[-1] == (date(2024, 10, 1), date(2024, 10, 15))
 
     def test_month_ranges_year_boundary(self):
-        from extractor.backfill import _month_ranges
         from datetime import date
+
+        from extractor.backfill import _month_ranges
         ranges = _month_ranges(date(2024, 11, 1), date(2025, 1, 31))
         months = [(r[0].year, r[0].month) for r in ranges]
         assert (2024, 11) in months
@@ -198,7 +201,7 @@ class TestBackfillHelpers:
         assert (2025, 1) in months
 
     def test_season_ranges_cover_all_seasons(self):
-        from extractor.backfill import SEASON_RANGES, DEFAULT_SEASONS
+        from extractor.backfill import DEFAULT_SEASONS, SEASON_RANGES
         for season in DEFAULT_SEASONS:
             assert season in SEASON_RANGES
             start, end = SEASON_RANGES[season]

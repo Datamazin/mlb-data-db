@@ -29,22 +29,21 @@ import argparse
 import os
 import sys
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import structlog
 from azure.identity import DefaultAzureCredential
 from azure.storage.blob import (
-    BlobClient,
     BlobSasPermissions,
     BlobServiceClient,
     generate_blob_sas,
 )
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-from run_tracker.tracker import RunTracker
-
 import duckdb
+
+from run_tracker.tracker import RunTracker
 
 log = structlog.get_logger(__name__)
 
@@ -209,8 +208,8 @@ class DistributionSync:
         The SAS grants read-only access (r) and expires in sas_expiry_hours.
         Uses a user-delegation key (no storage account key required).
         """
-        expiry = datetime.now(timezone.utc) + timedelta(hours=self._sas_expiry_hours)
-        start = datetime.now(timezone.utc) - timedelta(minutes=5)  # clock-skew buffer
+        expiry = datetime.now(UTC) + timedelta(hours=self._sas_expiry_hours)
+        start = datetime.now(UTC) - timedelta(minutes=5)  # clock-skew buffer
 
         # Obtain a user-delegation key valid for the SAS window
         key = self._service_client.get_user_delegation_key(
@@ -339,7 +338,7 @@ def build_sync_from_env(
     """
     account_name = os.environ.get("AZURE_STORAGE_ACCOUNT_NAME", "").strip()
     if not account_name:
-        raise EnvironmentError(
+        raise OSError(
             "AZURE_STORAGE_ACCOUNT_NAME environment variable is not set. "
             "Copy .env.example to .env and fill in your storage account name."
         )
@@ -418,6 +417,7 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> None:
     import logging
+
     from dotenv import load_dotenv
     load_dotenv()
     logging.basicConfig(level=logging.INFO)

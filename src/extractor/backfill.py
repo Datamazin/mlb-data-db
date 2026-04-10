@@ -20,7 +20,7 @@ import argparse
 import asyncio
 import sys
 from calendar import monthrange
-from datetime import date, timedelta
+from datetime import date
 from pathlib import Path
 
 import duckdb

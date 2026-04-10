@@ -24,7 +24,7 @@ import hashlib
 import re
 import sys
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import duckdb
@@ -99,7 +99,7 @@ class Aggregator:
                 (script_name, checksum, last_run_at, rows_affected)
             VALUES (?, ?, ?, ?)
             """,
-            [script_name, checksum, datetime.now(timezone.utc).isoformat(), rows],
+            [script_name, checksum, datetime.now(UTC).isoformat(), rows],
         )
 
     def run_script(self, script_path: Path, dry_run: bool = False) -> int:
@@ -149,10 +149,7 @@ class Aggregator:
         Returns:
             AggregateResult with counts and any per-script error messages.
         """
-        if scripts:
-            paths = sorted(SQL_DIR / s for s in scripts)
-        else:
-            paths = sorted(SQL_DIR.glob("*.sql"))
+        paths = sorted(SQL_DIR / s for s in scripts) if scripts else sorted(SQL_DIR.glob("*.sql"))
 
         if not paths:
             log.warning("aggregate_no_scripts_found", sql_dir=str(SQL_DIR))

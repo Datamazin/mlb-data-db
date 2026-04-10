@@ -18,7 +18,6 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import duckdb
 import pytest
 
 from distribution.sync import (
@@ -31,7 +30,6 @@ from distribution.sync import (
     build_sync_from_env,
     run_distribution,
 )
-
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -358,6 +356,7 @@ class TestDistributionSchedulerWiring:
 
     def test_distribution_fires_at_4_30(self):
         from apscheduler.triggers.cron import CronTrigger
+
         from scheduler.jobs import build_scheduler
         scheduler = build_scheduler()
         trigger = self._pending_map(scheduler)["distribution"]

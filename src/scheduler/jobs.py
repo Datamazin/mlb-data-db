@@ -50,14 +50,14 @@ from apscheduler.triggers.cron import CronTrigger
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
+from aggregator.aggregate import Aggregator
+from distribution.sync import run_distribution
 from extractor.client import MLBClient
 from extractor.extract import extract_game_feeds, extract_players, extract_schedule, extract_teams
 from extractor.writer import BronzeWriter
+from monitoring.health import run_health_check
 from run_tracker.tracker import RunTracker
 from transformer.transform import Transformer
-from aggregator.aggregate import Aggregator
-from distribution.sync import run_distribution
-from monitoring.health import run_health_check
 
 log = structlog.get_logger(__name__)
 

@@ -18,9 +18,7 @@ Typical call sequence for a nightly incremental run:
 from __future__ import annotations
 
 import asyncio
-import json
-from datetime import date, datetime, timezone
-from pathlib import Path
+from datetime import UTC, date, datetime
 from typing import Any
 
 import structlog
@@ -41,7 +39,7 @@ _DEFAULT_CONCURRENCY = 8
 
 
 def _utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 # ── Schedule ──────────────────────────────────────────────────────────────────

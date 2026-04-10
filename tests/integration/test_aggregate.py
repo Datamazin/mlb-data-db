@@ -8,13 +8,11 @@ chain.
 
 from __future__ import annotations
 
-from datetime import date
 from pathlib import Path
 
 import duckdb
-import pytest
 
-from aggregator.aggregate import Aggregator, AggregateResult
+from aggregator.aggregate import Aggregator
 
 GOLD_SQL_DIR = Path(__file__).parent.parent.parent / "sql" / "gold"
 

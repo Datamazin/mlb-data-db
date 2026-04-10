@@ -9,7 +9,6 @@ in-memory DuckDB connection — no mocks.
 from __future__ import annotations
 
 import duckdb
-import pytest
 
 
 class TestSchemasExist:

@@ -7,19 +7,16 @@ into meta.pipeline_runs to simulate various pipeline states.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from monitoring.health import CheckResult, HealthChecker, HealthReport, run_health_check
+from monitoring.health import HealthChecker, run_health_check
 from monitoring.sla import GAME_FRESHNESS_HOURS, SLA_REGISTRY, SLASpec
-from run_tracker.tracker import RunTracker
-
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
-NOW = datetime(2026, 3, 31, 8, 0, 0, tzinfo=timezone.utc)   # fixed reference time
+NOW = datetime(2026, 3, 31, 8, 0, 0, tzinfo=UTC)   # fixed reference time
 
 
 def _checker(db, db_path=None):
@@ -184,7 +181,7 @@ class TestDataFreshnessCheck:
 
     def test_no_games_ok_in_offseason(self, db):
         # Simulate December (off-season)
-        dec_now = datetime(2026, 12, 15, 8, 0, 0, tzinfo=timezone.utc)
+        dec_now = datetime(2026, 12, 15, 8, 0, 0, tzinfo=UTC)
         checker = HealthChecker(db, db_path=None, now=dec_now)
         result = checker.check_data_freshness()
         assert result.ok is True
@@ -343,10 +340,10 @@ class TestRunHealthCheck:
     def test_healthy_records_success(self, db_file_path):
         db_path, conn = db_file_path
         # Use December to skip data_freshness failure; record runs relative to that time
-        dec_now = datetime(2026, 12, 15, 8, 0, 0, tzinfo=timezone.utc)
+        dec_now = datetime(2026, 12, 15, 8, 0, 0, tzinfo=UTC)
         for spec in SLA_REGISTRY:
             _record_success(conn, spec.job_name, hours_ago=1, base_now=dec_now)
-        report = run_health_check(db_path=db_path, duckdb_conn=conn, now=dec_now)
+        run_health_check(db_path=db_path, duckdb_conn=conn, now=dec_now)
         row = conn.execute(
             "SELECT status FROM meta.pipeline_runs WHERE job_name = 'health_check'"
         ).fetchone()
@@ -367,6 +364,7 @@ class TestHealthCheckSchedulerWiring:
 
     def test_health_check_fires_at_7am(self):
         from apscheduler.triggers.cron import CronTrigger
+
         from scheduler.jobs import build_scheduler
         scheduler = build_scheduler()
         trigger = self._pending_map(scheduler)["health_check"]
