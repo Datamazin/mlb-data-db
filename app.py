@@ -18,8 +18,10 @@ st.set_page_config(
 DB_PATH = Path(os.getenv("MLB_DB_PATH", "data/gold/mlb.duckdb"))
 
 
-@st.cache_resource
 def get_conn() -> duckdb.DuckDBPyConnection | None:
+    # Opens a fresh read-only connection per call. Do NOT cache with
+    # @st.cache_resource — a persistent connection holds a DuckDB file lock
+    # that blocks the nightly pipeline from acquiring its write lock.
     if not DB_PATH.exists():
         return None
     return duckdb.connect(str(DB_PATH), read_only=True)
@@ -37,20 +39,51 @@ def main() -> None:
         )
         return
 
-    # ── Summary metrics ──────────────────────────────────────────────────────
-    seasons = conn.execute(
-        "SELECT COUNT(DISTINCT season_year) FROM gold.fact_game"
-    ).fetchone()[0]
-    total_games = conn.execute(
-        "SELECT COUNT(*) FROM gold.fact_game WHERE status = 'Final'"
-    ).fetchone()[0]
-    total_teams = conn.execute(
-        "SELECT COUNT(DISTINCT team_id) FROM gold.dim_team WHERE active"
-    ).fetchone()[0]
-    total_players = conn.execute(
-        "SELECT COUNT(*) FROM gold.dim_player WHERE active"
-    ).fetchone()[0]
+    # ── Gather all data before rendering, then close the connection ──────────
+    try:
+        seasons = conn.execute(
+            "SELECT COUNT(DISTINCT season_year) FROM gold.fact_game"
+        ).fetchone()[0]
+        total_games = conn.execute(
+            "SELECT COUNT(*) FROM gold.fact_game WHERE status = 'Final'"
+        ).fetchone()[0]
+        total_teams = conn.execute(
+            "SELECT COUNT(DISTINCT team_id) FROM gold.dim_team WHERE active"
+        ).fetchone()[0]
+        total_players = conn.execute(
+            "SELECT COUNT(*) FROM gold.dim_player WHERE active"
+        ).fetchone()[0]
 
+        recent = conn.execute("""
+            SELECT
+                game_date,
+                away_team_abbrev  AS away,
+                away_score,
+                home_score,
+                home_team_abbrev  AS home,
+                venue_name,
+                game_type,
+                innings
+            FROM gold.fact_game
+            WHERE status = 'Final'
+            ORDER BY game_date DESC, game_pk DESC
+            LIMIT 20
+        """).df()
+
+        by_season = conn.execute("""
+            SELECT
+                season_year                                         AS season,
+                COUNT(*) FILTER (WHERE status = 'Final')           AS final,
+                COUNT(*) FILTER (WHERE game_type = 'R')            AS regular,
+                COUNT(*) FILTER (WHERE game_type IN ('F','D','L','W')) AS postseason
+            FROM gold.fact_game
+            GROUP BY season_year
+            ORDER BY season_year
+        """).df()
+    finally:
+        conn.close()
+
+    # ── Summary metrics ──────────────────────────────────────────────────────
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Seasons", seasons)
     c2.metric("Games (Final)", f"{total_games:,}")
@@ -61,22 +94,6 @@ def main() -> None:
 
     # ── Recent games ─────────────────────────────────────────────────────────
     st.subheader("Recent Results")
-
-    recent = conn.execute("""
-        SELECT
-            game_date,
-            away_team_abbrev  AS away,
-            away_score,
-            home_score,
-            home_team_abbrev  AS home,
-            venue_name,
-            game_type,
-            innings
-        FROM gold.fact_game
-        WHERE status = 'Final'
-        ORDER BY game_date DESC, game_pk DESC
-        LIMIT 20
-    """).df()
 
     if recent.empty:
         st.info("No completed games found yet.")
@@ -99,17 +116,6 @@ def main() -> None:
 
     # ── Season breakdown ─────────────────────────────────────────────────────
     st.subheader("Games by Season")
-
-    by_season = conn.execute("""
-        SELECT
-            season_year                                         AS season,
-            COUNT(*) FILTER (WHERE status = 'Final')           AS final,
-            COUNT(*) FILTER (WHERE game_type = 'R')            AS regular,
-            COUNT(*) FILTER (WHERE game_type IN ('F','D','L','W')) AS postseason
-        FROM gold.fact_game
-        GROUP BY season_year
-        ORDER BY season_year
-    """).df()
 
     if not by_season.empty:
         st.dataframe(by_season, width="stretch", hide_index=True)
