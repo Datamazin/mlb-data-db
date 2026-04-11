@@ -24,6 +24,7 @@ seasons = conn.execute(
 ).fetchall()
 
 if not seasons:
+    conn.close()
     st.info("No standings data yet. Run the aggregation pipeline to populate.")
     st.stop()
 
@@ -55,6 +56,7 @@ df = conn.execute("""
       )
     ORDER BY t.league_name, t.division_name, s.wins DESC
 """, [selected_season, selected_season]).df()
+conn.close()
 
 if df.empty:
     st.info("No standings rows for this season.")
