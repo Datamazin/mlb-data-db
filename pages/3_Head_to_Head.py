@@ -26,6 +26,7 @@ teams = conn.execute("""
 """).df()
 
 if teams.empty:
+    conn.close()
     st.info("No team data yet.")
     st.stop()
 
@@ -53,6 +54,7 @@ id_b = conn.execute(
 ).fetchone()
 
 if not id_a or not id_b:
+    conn.close()
     st.warning("Could not resolve team IDs.")
     st.stop()
 
@@ -119,6 +121,7 @@ log = conn.execute(f"""
     {season_filter.replace('season_year', 'g.season_year')}
     ORDER BY g.game_date DESC
 """, [id_a, id_b, id_b, id_a]).df()
+conn.close()
 
 if log.empty:
     st.info("No game log entries.")
