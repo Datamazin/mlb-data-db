@@ -22,6 +22,7 @@ seasons = [r[0] for r in conn.execute(
 ).fetchall()]
 
 if not seasons:
+    conn.close()
     st.info("No team data yet.")
     st.stop()
 
@@ -41,6 +42,7 @@ df = conn.execute("""
     WHERE season_year = ?
     ORDER BY league_name, division_name, team_name
 """, [season]).df()
+conn.close()
 
 for league in ["American League", "National League"]:
     league_df = df[df["league_name"] == league]
