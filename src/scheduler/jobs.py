@@ -321,7 +321,7 @@ async def publish_duckdb(
             return
 
         today = date.today().isoformat()
-        _run(["git", "add", str(db_path)])
+        _run(["git", "add", "-f", str(db_path)])
         _run(["git", "commit", "-m", f"chore: update mlb.duckdb [{today}]"])
         _run(["git", "push"])
 
