@@ -120,6 +120,7 @@ df = conn.execute(f"""
     ORDER BY last_name, first_name
     LIMIT {PAGE_SIZE} OFFSET {offset}
 """, params).df()
+conn.close()
 df["position"] = df["position"].map(lambda p: POSITION_LABELS.get(p, p) if p else p)
 
 # ── Results header ────────────────────────────────────────────────────────────
