@@ -45,7 +45,7 @@ NON_POSITIONS = ("PH", "PR")
 
 POSITIONS = ["All Positions", "C", "1B", "2B", "3B", "SS", "LF", "CF", "RF", "DH", "P"]
 
-# ── Load filter options ────────────────────────────────────────────────────────
+# ── Load seasons first so the team list can be scoped to the selected season ──
 
 conn = get_conn()
 if conn is None:
@@ -56,13 +56,9 @@ try:
     seasons = [r[0] for r in conn.execute(
         "SELECT DISTINCT season_year FROM silver.games ORDER BY season_year DESC"
     ).fetchall()]
-
-    all_teams = ["All Teams"] + [r[0] for r in conn.execute(
-        "SELECT DISTINCT team_abbrev FROM gold.dim_team ORDER BY team_abbrev"
-    ).fetchall()]
 except Exception as exc:
     conn.close()
-    st.error(f"Failed to load filter options: {exc}")
+    st.error(f"Failed to load seasons: {exc}")
     st.stop()
 
 # ── Filter row ────────────────────────────────────────────────────────────────
@@ -71,6 +67,19 @@ c1, c2, c3, c4, c5, c6, c7 = st.columns([1, 1.4, 1, 1.4, 1.4, 1.4, 1.4])
 
 with c1:
     season = st.selectbox("Season", seasons)
+
+# Team list scoped to the selected season so cross-season abbrev changes
+# (e.g. OAK → ATH) don't produce dead filter options.
+try:
+    all_teams = ["All Teams"] + [r[0] for r in conn.execute(
+        "SELECT DISTINCT team_abbrev FROM gold.dim_team WHERE season_year = ? ORDER BY team_abbrev",
+        [season],
+    ).fetchall()]
+except Exception as exc:
+    conn.close()
+    st.error(f"Failed to load teams: {exc}")
+    st.stop()
+
 with c2:
     game_type_label = st.selectbox("Game Type", list(GAME_TYPE_MAP))
 with c3:
