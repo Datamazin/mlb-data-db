@@ -27,6 +27,7 @@ seasons = [r[0] for r in conn.execute(
 ).fetchall()]
 
 if not seasons:
+    conn.close()
     st.info("No game data yet.")
     st.stop()
 
@@ -340,3 +341,5 @@ if team_filter != "All" and not df.empty:
     )
     fig.add_hline(y=0, line_dash="dash", line_color="gray")
     st.plotly_chart(fig, width="stretch")
+
+conn.close()
