@@ -51,6 +51,7 @@ from extractor.client import MLBClient
 from extractor.extract import extract_game_feeds, extract_players, extract_schedule, extract_teams
 from extractor.writer import BronzeWriter
 from run_tracker.tracker import RunTracker
+from transformer.game_batting import populate_from_files as populate_batting
 from transformer.transform import Transformer
 from aggregator.aggregate import Aggregator
 
@@ -148,7 +149,18 @@ async def nightly_incremental(
                     ],
                 )
 
-        # 5 — Transform bronze → silver
+        # 5 — Populate silver.game_batting for this date
+        batting_file = (
+            bronze_path
+            / f"games/year={target_date.year}"
+            / f"month={target_date.month:02d}"
+            / f"games_{target_date.strftime('%Y%m%d')}.parquet"
+        )
+        if batting_file.exists():
+            batting_rows = populate_batting(conn, [batting_file])
+            log.info("nightly_incremental_batting", rows=batting_rows, target_date=str(target_date))
+
+        # 7 — Transform bronze → silver
         # year_glob: scope partition scans to the active season so we don't
         # re-read multi-GB historical game feeds on every nightly run.
         # force=True: script checksums don't change between runs, so without
@@ -158,7 +170,7 @@ async def nightly_incremental(
         if not transform_result.success:
             raise RuntimeError(f"Transform failed: {transform_result.errors}")
 
-        # 6 — Aggregate silver → gold
+        # 8 — Aggregate silver → gold
         aggregator = Aggregator(conn)
         agg_result = aggregator.run(force=True)
         if not agg_result.success:
