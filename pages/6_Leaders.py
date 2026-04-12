@@ -30,6 +30,14 @@ div[data-baseweb="tab-list"] button[aria-selected="false"]:hover {
 div[data-baseweb="tab-list"] button[aria-selected="false"]:hover p {
     color: #1565C0 !important;
 }
+div[data-testid="stDataFrame"] [role="columnheader"],
+div[data-testid="stDataFrame"] [role="gridcell"] {
+    font-size: 0.72rem !important;
+}
+div[data-testid="stDataFrame"] [role="columnheader"] {
+    padding-left: 0.2rem !important;
+    padding-right: 0.2rem !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -140,7 +148,14 @@ with hit_tab:
     with hc1:
         position = st.selectbox("Position", BAT_POSITIONS)
     with hc2:
-        bat_sort_label = st.selectbox("Sort by", list(BAT_SORT), key="bat_sort")
+        bat_sort_options = list(BAT_SORT)
+        bat_default_sort = st.session_state.get("leaders_bat_sort", bat_sort_options[0])
+        bat_sort_label = st.selectbox(
+            "Sort by",
+            bat_sort_options,
+            index=bat_sort_options.index(bat_default_sort) if bat_default_sort in bat_sort_options else 0,
+        )
+        st.session_state["leaders_bat_sort"] = bat_sort_label
     with hc3:
         bat_min_ab = st.number_input("Min AB", min_value=0, value=0, step=5, key="bat_min_ab")
 
@@ -148,6 +163,7 @@ with hit_tab:
 
     batting_sql = f"""
         SELECT
+            p.player_id,
             p.full_name,
             MODE(gb.position_abbrev)
                 FILTER (WHERE gb.position_abbrev NOT IN {NON_POSITIONS})  AS pos,
@@ -209,7 +225,14 @@ with pitch_tab:
     with pc1:
         role = st.selectbox("Role", ["All", "Starters", "Relievers"])
     with pc2:
-        pit_sort_label = st.selectbox("Sort by", list(PIT_SORT), key="pit_sort")
+        pit_sort_options = list(PIT_SORT)
+        pit_default_sort = st.session_state.get("leaders_pit_sort", pit_sort_options[0])
+        pit_sort_label = st.selectbox(
+            "Sort by",
+            pit_sort_options,
+            index=pit_sort_options.index(pit_default_sort) if pit_default_sort in pit_sort_options else 0,
+        )
+        st.session_state["leaders_pit_sort"] = pit_sort_label
     with pc3:
         pit_min_ip = st.number_input("Min IP", min_value=0, value=0, step=5, key="pit_min_ip")
 
@@ -223,6 +246,7 @@ with pitch_tab:
 
     pitching_sql = f"""
         SELECT
+            gp.player_id,
             p.full_name,
             CASE WHEN COUNT(DISTINCT t.team_abbrev) > 1 THEN '2TM'
                  ELSE ANY_VALUE(t.team_abbrev) END                               AS team,
@@ -275,17 +299,10 @@ with pitch_tab:
 # Close connection — all queries complete
 conn.close()
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# RENDER HITTING
-# ═══════════════════════════════════════════════════════════════════════════════
-
-# Maps internal column key → display header (for sorted-column ▼ indicator)
-BAT_SORT_TO_HEADER: dict[str, str] = {
-    "hr": "HR", "avg": "AVG", "ops": "OPS", "rbi": "RBI",
-    "obp": "OBP", "slg": "SLG", "h": "H", "r": "R",
-    "ab": "AB", "doubles": "2B", "triples": "3B", "bb": "BB",
-    "so": "SO", "g": "G",
-}
+def _open_profile(player_id: int) -> None:
+    st.session_state["profile_player_id"] = int(player_id)
+    st.session_state["profile_season"] = "Career"
+    st.switch_page("pages/7_Player_Profile.py")
 
 with hit_tab:
     if position != "All Positions":
@@ -325,41 +342,51 @@ with hit_tab:
         for stat in ("avg", "obp", "slg", "ops"):
             df_bat[stat] = df_bat[stat].apply(_fmt_rate)
 
-        # ── Add ▼ to the sorted column header so it's visually obvious
-        sort_header = BAT_SORT_TO_HEADER.get(bat_col, "")
-
-        def _bat_label(header: str) -> str:
-            return f"▼ {header}" if header == sort_header else header
-
-        _bat_cols = ["rank", "player", "team", "g", "ab", "r", "h",
-                     "doubles", "triples", "hr", "rbi", "bb", "so",
-                     "avg", "obp", "slg", "ops"]
-
         st.dataframe(
-            df_bat[_bat_cols],
+            df_bat[
+                [
+                    "rank", "player", "team", "g", "ab", "r", "h",
+                    "doubles", "triples", "hr", "rbi", "bb", "so",
+                    "avg", "obp", "slg", "ops",
+                ]
+            ],
+            width="stretch",
             hide_index=True,
-            use_container_width=True,
             column_config={
-                "rank":    st.column_config.NumberColumn(_bat_label("#"),   width=44),
-                "player":  st.column_config.TextColumn("Player",            width=200),
-                "team":    st.column_config.TextColumn(_bat_label("Team"),  width=60),
-                "g":       st.column_config.NumberColumn(_bat_label("G"),   width=44),
-                "ab":      st.column_config.NumberColumn(_bat_label("AB"),  width=50),
-                "r":       st.column_config.NumberColumn(_bat_label("R"),   width=44),
-                "h":       st.column_config.NumberColumn(_bat_label("H"),   width=44),
-                "doubles": st.column_config.NumberColumn(_bat_label("2B"),  width=44),
-                "triples": st.column_config.NumberColumn(_bat_label("3B"),  width=44),
-                "hr":      st.column_config.NumberColumn(_bat_label("HR"),  width=44),
-                "rbi":     st.column_config.NumberColumn(_bat_label("RBI"), width=50),
-                "bb":      st.column_config.NumberColumn(_bat_label("BB"),  width=44),
-                "so":      st.column_config.NumberColumn(_bat_label("SO"),  width=44),
-                "avg":     st.column_config.TextColumn(_bat_label("AVG"),   width=64),
-                "obp":     st.column_config.TextColumn(_bat_label("OBP"),   width=64),
-                "slg":     st.column_config.TextColumn(_bat_label("SLG"),   width=64),
-                "ops":     st.column_config.TextColumn(_bat_label("OPS"),   width=64),
+                "rank": st.column_config.NumberColumn("#", width="small"),
+                "player": st.column_config.TextColumn("Player", width="small"),
+                "team": st.column_config.TextColumn("Team", width="small"),
+                "g": st.column_config.NumberColumn("G", width="small"),
+                "ab": st.column_config.NumberColumn("AB", width="small"),
+                "r": st.column_config.NumberColumn("R", width="small"),
+                "h": st.column_config.NumberColumn("H", width="small"),
+                "doubles": st.column_config.NumberColumn("2B", width="small"),
+                "triples": st.column_config.NumberColumn("3B", width="small"),
+                "hr": st.column_config.NumberColumn("HR", width="small"),
+                "rbi": st.column_config.NumberColumn("RBI", width="small"),
+                "bb": st.column_config.NumberColumn("BB", width="small"),
+                "so": st.column_config.NumberColumn("SO", width="small"),
+                "avg": st.column_config.TextColumn("AVG", width="small"),
+                "obp": st.column_config.TextColumn("OBP", width="small"),
+                "slg": st.column_config.TextColumn("SLG", width="small"),
+                "ops": st.column_config.TextColumn("OPS", width="small"),
             },
         )
         st.caption(f"{len(df_bat):,} players — sorted by {bat_sort_label}")
+        bat_options = [(None, "Choose player")] + [
+            (int(row.player_id), f"{row.full_name} ({row.team})")
+            for row in df_bat[["player_id", "full_name", "team"]].itertuples(index=False)
+        ]
+        bat_choice = st.selectbox(
+            "Choose player",
+            bat_options,
+            format_func=lambda option: option[1],
+            key="bat_profile_select",
+        )
+        if bat_choice[0] is not None:
+            st.caption(f"Selected: {bat_choice[1]}")
+            if st.button(f"Open {bat_choice[1]} profile", type="primary", key="bat_profile_btn"):
+                _open_profile(bat_choice[0])
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # RENDER PITCHING
@@ -380,38 +407,57 @@ with pitch_tab:
             method="dense", ascending=not pit_desc, na_option="bottom"
         ).astype(int))
 
+        for col in ("g", "gs", "w", "l", "sv", "hld", "bs", "outs", "h", "r", "er", "hr", "bb", "so"):
+            df_pit[col] = df_pit[col].fillna(0).astype(int)
+
         if pit_col in {"era", "whip"} and pit_min_ip == 0:
             st.caption("Tip: set Min IP to hide pitchers with too few innings.")
 
         st.dataframe(
-            df_pit[["rank", "full_name", "team",
-                    "g", "gs", "w", "l", "sv", "hld", "bs",
-                    "ip", "h", "r", "er", "hr", "bb", "so",
-                    "era", "whip", "k9", "bb9"]],
+            df_pit[
+                [
+                    "rank", "full_name", "team", "g", "gs", "w", "l", "sv", "hld", "bs",
+                    "ip", "h", "r", "er", "hr", "bb", "so", "era", "whip", "k9", "bb9",
+                ]
+            ],
+            width="stretch",
             hide_index=True,
-            use_container_width=True,
             column_config={
-                "rank":      st.column_config.NumberColumn("#",      width=40),
-                "full_name": st.column_config.TextColumn("Player",  width=170),
-                "team":      st.column_config.TextColumn("Team",    width=56),
-                "g":         st.column_config.NumberColumn("G",     width=44),
-                "gs":        st.column_config.NumberColumn("GS",    width=44),
-                "w":         st.column_config.NumberColumn("W",     width=40),
-                "l":         st.column_config.NumberColumn("L",     width=40),
-                "sv":        st.column_config.NumberColumn("SV",    width=44),
-                "hld":       st.column_config.NumberColumn("HLD",   width=48),
-                "bs":        st.column_config.NumberColumn("BS",    width=40),
-                "ip":        st.column_config.TextColumn("IP",      width=54),
-                "h":         st.column_config.NumberColumn("H",     width=44),
-                "r":         st.column_config.NumberColumn("R",     width=44),
-                "er":        st.column_config.NumberColumn("ER",    width=44),
-                "hr":        st.column_config.NumberColumn("HR",    width=44),
-                "bb":        st.column_config.NumberColumn("BB",    width=44),
-                "so":        st.column_config.NumberColumn("SO",    width=44),
-                "era":       st.column_config.NumberColumn("ERA",   format="%.2f", width=60),
-                "whip":      st.column_config.NumberColumn("WHIP",  format="%.3f", width=64),
-                "k9":        st.column_config.NumberColumn("K/9",   format="%.1f", width=56),
-                "bb9":       st.column_config.NumberColumn("BB/9",  format="%.1f", width=60),
+                "rank": st.column_config.NumberColumn("#", width="small"),
+                "full_name": st.column_config.TextColumn("Player", width="small"),
+                "team": st.column_config.TextColumn("Team", width="small"),
+                "g": st.column_config.NumberColumn("G", width="small"),
+                "gs": st.column_config.NumberColumn("GS", width="small"),
+                "w": st.column_config.NumberColumn("W", width="small"),
+                "l": st.column_config.NumberColumn("L", width="small"),
+                "sv": st.column_config.NumberColumn("SV", width="small"),
+                "hld": st.column_config.NumberColumn("HLD", width="small"),
+                "bs": st.column_config.NumberColumn("BS", width="small"),
+                "ip": st.column_config.TextColumn("IP", width="small"),
+                "h": st.column_config.NumberColumn("H", width="small"),
+                "r": st.column_config.NumberColumn("R", width="small"),
+                "er": st.column_config.NumberColumn("ER", width="small"),
+                "hr": st.column_config.NumberColumn("HR", width="small"),
+                "bb": st.column_config.NumberColumn("BB", width="small"),
+                "so": st.column_config.NumberColumn("SO", width="small"),
+                "era": st.column_config.NumberColumn("ERA", format="%.2f", width="small"),
+                "whip": st.column_config.NumberColumn("WHIP", format="%.3f", width="small"),
+                "k9": st.column_config.NumberColumn("K/9", format="%.1f", width="small"),
+                "bb9": st.column_config.NumberColumn("BB/9", format="%.1f", width="small"),
             },
         )
         st.caption(f"{len(df_pit):,} pitchers — sorted by {pit_sort_label}")
+        pit_options = [(None, "Choose player")] + [
+            (int(row.player_id), f"{row.full_name} ({row.team})")
+            for row in df_pit[["player_id", "full_name", "team"]].itertuples(index=False)
+        ]
+        pit_choice = st.selectbox(
+            "Choose player",
+            pit_options,
+            format_func=lambda option: option[1],
+            key="pit_profile_select",
+        )
+        if pit_choice[0] is not None:
+            st.caption(f"Selected: {pit_choice[1]}")
+            if st.button(f"Open {pit_choice[1]} profile", type="primary", key="pit_profile_btn"):
+                _open_profile(pit_choice[0])
