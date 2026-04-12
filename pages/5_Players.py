@@ -104,6 +104,7 @@ page = st.session_state.get("players_page", 1)
 offset = (page - 1) * PAGE_SIZE
 df = conn.execute(f"""
     SELECT
+        player_id,
         full_name,
         primary_position AS position,
         bats,
@@ -122,12 +123,13 @@ df = conn.execute(f"""
 """, params).df()
 conn.close()
 df["position"] = df["position"].map(lambda p: POSITION_LABELS.get(p, p) if p else p)
+display_df = df.drop(columns=["player_id"])
 
 # ── Results header ────────────────────────────────────────────────────────────
 st.write(f"{total:,} players — page {page} of {total_pages}")
 
 st.dataframe(
-    df,
+    display_df,
     width="stretch",
     hide_index=True,
     column_config={
@@ -144,6 +146,32 @@ st.dataframe(
         "active":         "Active",
     },
 )
+
+if not df.empty:
+    current_profile_id = st.session_state.get("profile_player_id")
+    player_options = [(None, "Choose player")] + [
+        (int(row.player_id), row.full_name)
+        for row in df[["player_id", "full_name"]].itertuples(index=False)
+    ]
+    default_index = 0
+    if current_profile_id in df["player_id"].tolist():
+        default_index = next(
+            index for index, option in enumerate(player_options) if option[0] == current_profile_id
+        )
+
+    selected_player = st.selectbox(
+        "Choose Player",
+        player_options,
+        index=default_index,
+        format_func=lambda option: option[1],
+        key="players_profile_select",
+    )
+    if selected_player[0] is not None:
+        st.caption(f"Selected: {selected_player[1]}")
+        if st.button(f"Open {selected_player[1]} profile", type="primary", key="players_profile_btn"):
+            st.session_state["profile_player_id"] = int(selected_player[0])
+            st.session_state["profile_season"] = "Career"
+            st.switch_page("pages/7_Player_Profile.py")
 
 # ── Pagination controls ───────────────────────────────────────────────────────
 if total_pages > 1:
