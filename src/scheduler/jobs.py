@@ -52,6 +52,7 @@ from extractor.extract import extract_game_feeds, extract_players, extract_sched
 from extractor.writer import BronzeWriter
 from run_tracker.tracker import RunTracker
 from transformer.game_batting import populate_from_files as populate_batting
+from transformer.game_pitching import populate_from_files as populate_pitching
 from transformer.transform import Transformer
 from aggregator.aggregate import Aggregator
 
@@ -159,6 +160,9 @@ async def nightly_incremental(
         if batting_file.exists():
             batting_rows = populate_batting(conn, [batting_file])
             log.info("nightly_incremental_batting", rows=batting_rows, target_date=str(target_date))
+
+            pitching_rows = populate_pitching(conn, [batting_file])
+            log.info("nightly_incremental_pitching", rows=pitching_rows, target_date=str(target_date))
 
         # 7 — Transform bronze → silver
         # year_glob: scope partition scans to the active season so we don't
