@@ -5,13 +5,33 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import pandas as pd
 import streamlit as st
 
 from app import get_conn
 
 st.set_page_config(page_title="Leaders — MLB Analytics", layout="wide")
 st.title("Leaders")
+
+st.markdown("""
+<style>
+/* Active tab — blue text + bold */
+div[data-baseweb="tab-list"] button[aria-selected="true"] p {
+    color: #1565C0 !important;
+    font-weight: 700 !important;
+}
+/* Active tab indicator bar — blue */
+div[data-baseweb="tab-highlight"] {
+    background-color: #1565C0 !important;
+}
+/* Inactive tab hover — blue tint background + blue text */
+div[data-baseweb="tab-list"] button[aria-selected="false"]:hover {
+    background-color: #e3f2fd !important;
+}
+div[data-baseweb="tab-list"] button[aria-selected="false"]:hover p {
+    color: #1565C0 !important;
+}
+</style>
+""", unsafe_allow_html=True)
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -259,15 +279,7 @@ conn.close()
 # RENDER HITTING
 # ═══════════════════════════════════════════════════════════════════════════════
 
-# Column display names used for both the DataFrame and Styler highlight
-BAT_COL_NAMES: dict[str, str] = {
-    "rank": "#", "player": "Player", "team": "Team",
-    "g": "G", "ab": "AB", "r": "R", "h": "H",
-    "doubles": "2B", "triples": "3B", "hr": "HR", "rbi": "RBI",
-    "bb": "BB", "so": "SO",
-    "avg": "AVG", "obp": "OBP", "slg": "SLG", "ops": "OPS",
-}
-# Map sort column key → display header name (for Styler highlight)
+# Maps internal column key → display header (for sorted-column ▼ indicator)
 BAT_SORT_TO_HEADER: dict[str, str] = {
     "hr": "HR", "avg": "AVG", "ops": "OPS", "rbi": "RBI",
     "obp": "OBP", "slg": "SLG", "h": "H", "r": "R",
@@ -292,6 +304,10 @@ with hit_tab:
         if bat_col in {"avg", "obp", "slg", "ops"} and bat_min_ab == 0:
             st.caption("Tip: set Min AB to hide players with too few plate appearances.")
 
+        # ── Cast count stats to integers (DuckDB SUM returns float-nullable)
+        for col in ("g", "ab", "r", "h", "doubles", "triples", "hr", "rbi", "bb", "so"):
+            df_bat[col] = df_bat[col].fillna(0).astype(int)
+
         # ── Combine player name + position into one column (e.g. "Yordan Alvarez  DH")
         df_bat["player"] = (
             df_bat["full_name"] + "  " + df_bat["pos"].fillna("")
@@ -299,7 +315,7 @@ with hit_tab:
 
         # ── Format rate stats as ".341" (no leading zero) matching MLB.com style
         def _fmt_rate(val: float | None) -> str:
-            if val is None or pd.isna(val):
+            if val is None or (isinstance(val, float) and val != val):  # NaN check
                 return "—"
             # OPS can exceed 1.000 — keep leading digit if so
             if abs(val) >= 1:
@@ -309,19 +325,40 @@ with hit_tab:
         for stat in ("avg", "obp", "slg", "ops"):
             df_bat[stat] = df_bat[stat].apply(_fmt_rate)
 
-        # ── Build display DataFrame with renamed headers
-        disp = df_bat[list(BAT_COL_NAMES)].rename(columns=BAT_COL_NAMES)
-
-        # ── Highlight the sorted column with a light background via Styler
+        # ── Add ▼ to the sorted column header so it's visually obvious
         sort_header = BAT_SORT_TO_HEADER.get(bat_col, "")
-        styled = disp.style.hide(axis="index")
-        if sort_header in disp.columns:
-            styled = styled.set_properties(
-                subset=[sort_header],
-                **{"background-color": "#e8ecf5"},
-            )
 
-        st.dataframe(styled, use_container_width=True)
+        def _bat_label(header: str) -> str:
+            return f"▼ {header}" if header == sort_header else header
+
+        _bat_cols = ["rank", "player", "team", "g", "ab", "r", "h",
+                     "doubles", "triples", "hr", "rbi", "bb", "so",
+                     "avg", "obp", "slg", "ops"]
+
+        st.dataframe(
+            df_bat[_bat_cols],
+            hide_index=True,
+            use_container_width=True,
+            column_config={
+                "rank":    st.column_config.NumberColumn(_bat_label("#"),   width=44),
+                "player":  st.column_config.TextColumn("Player",            width=200),
+                "team":    st.column_config.TextColumn(_bat_label("Team"),  width=60),
+                "g":       st.column_config.NumberColumn(_bat_label("G"),   width=44),
+                "ab":      st.column_config.NumberColumn(_bat_label("AB"),  width=50),
+                "r":       st.column_config.NumberColumn(_bat_label("R"),   width=44),
+                "h":       st.column_config.NumberColumn(_bat_label("H"),   width=44),
+                "doubles": st.column_config.NumberColumn(_bat_label("2B"),  width=44),
+                "triples": st.column_config.NumberColumn(_bat_label("3B"),  width=44),
+                "hr":      st.column_config.NumberColumn(_bat_label("HR"),  width=44),
+                "rbi":     st.column_config.NumberColumn(_bat_label("RBI"), width=50),
+                "bb":      st.column_config.NumberColumn(_bat_label("BB"),  width=44),
+                "so":      st.column_config.NumberColumn(_bat_label("SO"),  width=44),
+                "avg":     st.column_config.TextColumn(_bat_label("AVG"),   width=64),
+                "obp":     st.column_config.TextColumn(_bat_label("OBP"),   width=64),
+                "slg":     st.column_config.TextColumn(_bat_label("SLG"),   width=64),
+                "ops":     st.column_config.TextColumn(_bat_label("OPS"),   width=64),
+            },
+        )
         st.caption(f"{len(df_bat):,} players — sorted by {bat_sort_label}")
 
 # ═══════════════════════════════════════════════════════════════════════════════
