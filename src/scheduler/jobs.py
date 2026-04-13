@@ -29,10 +29,12 @@ Each job:
 Scheduler entry point:
     uv run python -m src.scheduler.jobs
     uv run python -m src.scheduler.jobs --run nightly_incremental
+    uv run python -m src.scheduler.jobs --run nightly_incremental --date 2026-04-07
     uv run python -m src.scheduler.jobs --run roster_sync
     uv run python -m src.scheduler.jobs --run standings_snapshot
     uv run python -m src.scheduler.jobs --run distribution
     uv run python -m src.scheduler.jobs --run health_check
+    uv run python -m src.scheduler.jobs --run catchup --start-date 2026-03-27 --end-date 2026-04-13
 """
 
 from __future__ import annotations
@@ -171,6 +173,112 @@ async def nightly_incremental(
     except Exception as exc:
         tracker.fail_run(run_id, str(exc))
         log.error("nightly_incremental_failed", target_date=str(target_date), error=str(exc))
+        raise
+    finally:
+        conn.close()
+
+
+# ── Job: Catch-up ─────────────────────────────────────────────────────────────
+
+async def catchup(
+    start_date: date,
+    end_date: date | None = None,
+    db_path: Path = DB_PATH,
+    bronze_path: Path = BRONZE_PATH,
+) -> None:
+    """
+    Extract all games from start_date through end_date (inclusive), then run
+    one transform + aggregate pass over all the newly loaded data.
+
+    Used to back-fill missed days when the nightly schedule was not running.
+    More efficient than calling nightly_incremental per day because
+    transform/aggregate only execute once at the end.
+
+    Example:
+        --run catchup --start-date 2026-03-27 --end-date 2026-04-13
+    """
+    if end_date is None:
+        end_date = date.today() - timedelta(days=1)
+
+    log.info("catchup_start", start_date=str(start_date), end_date=str(end_date))
+
+    conn = duckdb.connect(str(db_path))
+    tracker = RunTracker(conn)
+    writer = BronzeWriter(bronze_path)
+    run_id = tracker.start_run("catchup", start_date=str(start_date), end_date=str(end_date))
+
+    total_found = 0
+    total_extracted = 0
+
+    try:
+        async with MLBClient() as client:
+            current = start_date
+            while current <= end_date:
+                season_year = current.year
+                game_pks = await extract_schedule(
+                    client, writer,
+                    start_date=current,
+                    end_date=current,
+                    season_year=season_year,
+                    game_types=INCREMENTAL_GAME_TYPES,
+                )
+                total_found += len(game_pks)
+
+                new_pks = tracker.filter_unextracted(
+                    "game_feed", [str(pk) for pk in game_pks]
+                )
+                skipped = len(game_pks) - len(new_pks)
+                if skipped:
+                    log.info("catchup_skip_existing", date=str(current), skipped=skipped)
+
+                if new_pks:
+                    extracted_pks = await extract_game_feeds(
+                        client, writer, [int(pk) for pk in new_pks]
+                    )
+                    total_extracted += len(extracted_pks)
+                    tracker.record_checksums_bulk(
+                        "game_feed",
+                        [
+                            {
+                                "entity_key": str(pk),
+                                "raw_json": f'{{"gamePk":{pk}}}',
+                                "source_url": f"/v1.1/game/{pk}/feed/live",
+                            }
+                            for pk in extracted_pks
+                        ],
+                    )
+
+                log.info("catchup_date_done", date=str(current), found=len(game_pks))
+                current += timedelta(days=1)
+
+        # One final transform + aggregate for all extracted data
+        transformer = Transformer(conn, bronze_path)
+        transform_result = transformer.run()
+        if not transform_result.success:
+            raise RuntimeError(f"Transform failed: {transform_result.errors}")
+
+        aggregator = Aggregator(conn)
+        agg_result = aggregator.run()
+        if not agg_result.success:
+            raise RuntimeError(f"Aggregate failed: {agg_result.errors}")
+
+        tracker.complete_run(
+            run_id,
+            records_extracted=total_extracted,
+            records_loaded=transform_result.total_rows_loaded,
+        )
+        log.info(
+            "catchup_done",
+            start_date=str(start_date),
+            end_date=str(end_date),
+            total_found=total_found,
+            total_extracted=total_extracted,
+            rows_loaded=transform_result.total_rows_loaded,
+        )
+
+    except Exception as exc:
+        tracker.fail_run(run_id, str(exc))
+        log.error("catchup_failed", start_date=str(start_date), end_date=str(end_date), error=str(exc))
         raise
     finally:
         conn.close()
@@ -419,7 +527,10 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--run",
-        choices=["nightly_incremental", "roster_sync", "standings_snapshot", "distribution", "health_check"],
+        choices=[
+            "nightly_incremental", "roster_sync", "standings_snapshot",
+            "distribution", "health_check", "catchup",
+        ],
         default=None,
         metavar="JOB",
         help="Run a single job immediately and exit (default: start the daemon)",
@@ -430,6 +541,20 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         metavar="YYYY-MM-DD",
         help="Target date for nightly_incremental (default: yesterday)",
+    )
+    parser.add_argument(
+        "--start-date",
+        type=date.fromisoformat,
+        default=None,
+        metavar="YYYY-MM-DD",
+        help="Start date for catchup (inclusive, required for catchup)",
+    )
+    parser.add_argument(
+        "--end-date",
+        type=date.fromisoformat,
+        default=None,
+        metavar="YYYY-MM-DD",
+        help="End date for catchup (inclusive, default: yesterday)",
     )
     parser.add_argument(
         "--season", type=int, default=ACTIVE_SEASON,
@@ -465,6 +590,15 @@ async def _run_once(args: argparse.Namespace) -> None:
         await distribution(db_path=args.db)
     elif args.run == "health_check":
         await health_check(db_path=args.db)
+    elif args.run == "catchup":
+        if args.start_date is None:
+            raise ValueError("--start-date is required for the catchup job")
+        await catchup(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            db_path=args.db,
+            bronze_path=args.bronze,
+        )
 
 
 def main() -> None:

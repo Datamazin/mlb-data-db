@@ -15,8 +15,17 @@ on:
           - nightly_incremental
           - roster_sync
           - standings_snapshot
+          - catchup
       date:
         description: "Target date for nightly_incremental (YYYY-MM-DD, default: yesterday)"
+        required: false
+        default: ""
+      start_date:
+        description: "Start date for catchup (YYYY-MM-DD, required when job=catchup)"
+        required: false
+        default: ""
+      end_date:
+        description: "End date for catchup (YYYY-MM-DD, default: yesterday)"
         required: false
         default: ""
 
@@ -24,7 +33,7 @@ jobs:
   run-pipeline:
     name: ${{ inputs.job || 'nightly_incremental' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 120
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -47,8 +56,18 @@ jobs:
         run: |
           JOB="${{ inputs.job || 'nightly_incremental' }}"
           ARGS="--run $JOB"
-          if [ -n "${{ inputs.date }}" ]; then
+          if [ "$JOB" = "nightly_incremental" ] && [ -n "${{ inputs.date }}" ]; then
             ARGS="$ARGS --date ${{ inputs.date }}"
+          fi
+          if [ "$JOB" = "catchup" ]; then
+            if [ -z "${{ inputs.start_date }}" ]; then
+              echo "ERROR: start_date is required for catchup job" >&2
+              exit 1
+            fi
+            ARGS="$ARGS --start-date ${{ inputs.start_date }}"
+            if [ -n "${{ inputs.end_date }}" ]; then
+              ARGS="$ARGS --end-date ${{ inputs.end_date }}"
+            fi
           fi
           uv run python -m src.scheduler.jobs $ARGS
 
